@@ -30,7 +30,7 @@ You can also install from source using `go install`:
 
     go install github.com/whoisnjoguu/elostirion/cmd/elo@latest
 
-The CLI reads a fleet spec (`elostirion.yaml`) and operates on one or more repositories.
+The CLI reads a fleet spec (`fleet-spec.yaml`) and operates on one or more repositories.
 The spec can be a local path or a remote git URL pinned to a ref.
 
 The common arguments are:
@@ -46,8 +46,8 @@ For example, verify the current repository in CI:
 Scan an entire org and open convergence pull requests:
 
     $ export GITHUB_TOKEN="token"
-    $ elo scan -spec ./elostirion.yaml -org <your-org-name>
-    $ elo apply -spec ./elostirion.yaml -org <your-org-name> --recipe bump-go
+    $ elo scan -spec ./fleet-spec.yaml -org <your-org-name>
+    $ elo apply -spec ./fleet-spec.yaml -org <your-org-name> --recipe bump-go
 
 See the CLI help (`-h` or `-help`) or below for full details.
 
