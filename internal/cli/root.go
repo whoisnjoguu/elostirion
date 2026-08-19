@@ -52,7 +52,6 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.elostirion.yaml)")
 	rootCmd.PersistentFlags().StringVarP(&specFlag, "spec", "s", "", "fleet spec: local path or git:: URL")
 	rootCmd.PersistentFlags().StringVarP(&formatFlag, "format", "f", "text", "output format: text, json, junit, sarif")
 	rootCmd.PersistentFlags().StringVar(&failOn, "fail-on", "error", "minimum severity that fails: error, drift, warn")
