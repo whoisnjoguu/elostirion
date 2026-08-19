@@ -2,12 +2,13 @@
 
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/whoisnjoguu/elostirion)](https://pkg.go.dev/github.com/whoisnjoguu/elostirion)
 
+![elo scan catching drift across a demo fleet](demo/scan.gif)
 
 `elostirion` applies desired-state management to fleets of repositories. You write a
 single spec describing what every service must look like; base image, language
-version, pipeline shape, Terraform module versions, required files, env contract e.t.c
-and `elostirion` scans your repos against it, verifies them in CI, and opens pull
-requests that converge the ones that have drifted.
+version, approved runtime images e.t.c and `elostirion` scans your repos against it
+and verifies them in CI, so drift is caught before it merges. Convergence pull
+requests and Terraform drift detection are next; see the [roadmap](#roadmap).
 
 ## Why?
 
@@ -16,11 +17,11 @@ run it once, and forget it. There is no memory of what the fleet _should_ look l
 so the next drift goes unnoticed until something breaks in production.
 
 `elostirion` is declarative instead. The spec is the source of truth, and reconciling
-against it is a repeatable operation. Run it on a schedule to catch drift across every repo and Terraform root, or run it as a per-repo CI gate so a change can't merge unless it conforms.
+against it is a repeatable operation. Run it on a schedule to catch drift across every repo, or run it as a per-repo CI gate so a change can't merge unless it conforms.
 
 As a library, the fleet model and scanners can be embedded in other tools: query
-which services run an old language version, which Dockerfiles diverge from the golden
-template, or which Terraform roots have drifted from their state.
+which services run an old language version, or which Dockerfiles diverge from the
+golden template.
 
 ## Usage: CLI
 
@@ -35,21 +36,20 @@ The spec can be a local path or a remote git URL pinned to a ref.
 
 The common arguments are:
 
-- The `-spec` flag to specify the spec, local or `git::` URL
-- A token, set with the `-token` flag or in the `GITHUB_TOKEN` / `BITBUCKET_TOKEN`
-  environment variable, for modes that read remote repos or open pull requests
+- The `--spec` flag to specify the spec, local or `git::` URL
+- The `--format` flag to pick the output: text, json, junit, or sarif
+- The `--fail-on` flag to set the minimum severity that fails the run
 
 For example, verify the current repository in CI:
 
-    $ elo verify -spec git::https://github.com/<your-org-name>/fleet-spec.git
+    $ elo verify --spec git::https://github.com/<your-org-name>/fleet-spec.git
 
-Scan an entire org and open convergence pull requests:
+Scan a directory of repositories (each immediate subdirectory is a repo) and
+report which ones digress from the spec:
 
-    $ export GITHUB_TOKEN="token"
-    $ elo scan -spec ./fleet-spec.yaml -org <your-org-name>
-    $ elo apply -spec ./fleet-spec.yaml -org <your-org-name> --recipe bump-go
+    $ elo scan --spec ./fleet-spec.yaml ~/src
 
-See the CLI help (`-h` or `-help`) or below for full details.
+See the CLI help (`-h` or `--help`) or below for full details.
 
 [releases]: https://github.com/whoisnjoguu/elostirion/releases
 
@@ -61,11 +61,12 @@ See the CLI help (`-h` or `-help`) or below for full details.
     scan     Read many repositories and report where they diverge from the
              spec, without making changes.
 
-    drift    Three-way diff Terraform roots (HEAD, state, cloud) and report
-             drift. Fills the standalone drift-detection gap left by driftctl.
+    apply    Evaluate repositories and print the change plan each violated
+             rule's recipe would produce. The pull-request write path is in
+             progress; see the roadmap.
 
-    apply    Open pull requests that converge repositories to the spec, using
-             named recipes.
+    drift    Reserved for Terraform drift detection; not yet implemented.
+             See the roadmap.
 
 ### Full
 
@@ -80,38 +81,44 @@ See the CLI help (`-h` or `-help`) or below for full details.
 
     Common options:
 
-      -spec=path|url         The fleet spec. A local path or a 'git::' URL
+      -s, --spec=path|url     The fleet spec. A local path or a 'git::' URL
                              with an optional '@ref' suffix. Required.
 
-      -format=fmt            Output format: text, json, junit, or sarif.
+      -f, --format=fmt        Output format: text, json, junit, or sarif.
                              junit surfaces results in Bitbucket's test report
                              UI; sarif annotates GitHub pull request diffs.
                              Default: text.
 
-      -fail-on=severity      Minimum severity that causes a non-zero exit:
-                             error, warn, or drift. Default: error.
+      --fail-on=severity      Minimum severity that causes a non-zero exit:
+                             error, drift, or warn. Default: error.
 
-      -token=token           API token for the target platform. If unset, use
-                             GITHUB_TOKEN or BITBUCKET_TOKEN.
+      -l, --language=langs    Languages to scan (for example go, py);
+                             repeatable or comma-separated. Default: all.
 
-      -org=org               Target every repository in the given org.
+      -d, --dry-run           Report what would change without making changes.
 
-      -repo=owner/name       Target a single repository. Can be repeated.
-
-      -tf-roots=glob         Glob of Terraform root directories for 'drift'.
-
-      -recipe=name           Named convergence recipe for 'apply'.
-
-      -dry-run               Report what would change without opening pull
-                             requests.
-
-      -v/-version            Print the version and exit.
+      -v, --verbose           Enable verbose output.
 
     Exit codes:
 
       0  conformant
       1  violations or drift found
       2  tool error
+
+## Roadmap
+
+The near-term work, in rough order:
+
+- **`apply` write path** — `apply` already computes per-repo change plans from
+  recipes; opening the pull requests on GitHub and Bitbucket is in progress.
+  Until then it reports what it would open (use `--dry-run`).
+- **Terraform drift** — `drift` will three-way diff Terraform roots (HEAD,
+  state, cloud) to fill the standalone drift-detection gap left by driftctl.
+- **Remote scanning** — `--org` / `--repo` flags so `scan` can read every
+  repository in a GitHub or Bitbucket org over the API (with `GITHUB_TOKEN` /
+  `BITBUCKET_TOKEN`) instead of local checkouts.
+- **More scanners** — Go, Python, and Dockerfile ship today; pipeline shape,
+  required files, and env contracts are next.
 
 ## CI integration
 
@@ -121,16 +128,25 @@ Bitbucket Pipelines:
 
     - step:
         name: Fleet conformance
-        image: whoisnjoguu/elostirion:1
+        image: golang:1.25
         script:
-          - elo verify -spec git::https://bitbucket.org/<your-org-name>/fleet-spec.git@v1 -format junit > test-results/elo.xml
+          - go install github.com/whoisnjoguu/elostirion/cmd/elo@latest
+          - mkdir -p test-results
+          - elo verify --spec git::https://bitbucket.org/<your-org-name>/fleet-spec.git@v1 --format junit > test-results/elo.xml
 
 GitHub Actions:
 
-    - uses: whoisnjoguu/elostirion-action@v1
+    - uses: actions/setup-go@v5
       with:
-        spec: <your-org-name>/fleet-spec
-        fail-on: error
+        go-version: "1.25"
+    - run: go install github.com/whoisnjoguu/elostirion/cmd/elo@latest
+    - run: elo verify --spec fleet-spec.yaml --format sarif > elo.sarif
+    - uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: elo.sarif
+
+Complete pipeline examples live in [examples/ci](examples/ci).
 
 In `verify` mode the binary only reads the checkout and the spec, so it needs no
 credentials and runs fast. Rules carry a severity, so a fleet-wide change can be
@@ -142,10 +158,11 @@ The CLI is built on the `elostirion` library, which can be used to build other t
 that model and reconcile repository fleets. See the [documentation][] for full
 details.
 
-    import "github.com/whoisnjoguu/elostirion"
+    import "github.com/whoisnjoguu/elostirion/pkg/scan"
 
-The library exposes the fleet model, the repository and Terraform scanners, and the
-reconciler that turns a diff into a change plan.
+The library exposes the fleet model (`pkg/model`), the spec loader (`pkg/spec`),
+the repository scanners (`pkg/scan`), and the reconciler (`pkg/reconcile`) that
+evaluates a spec against scanned facts.
 
 [documentation]: https://pkg.go.dev/github.com/whoisnjoguu/elostirion?tab=doc
 
