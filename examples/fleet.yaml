@@ -1,0 +1,28 @@
+version: 1
+name: enterprise-apis-fleet
+
+rules:
+  - id: go-version-min
+    description: Go version in go.mod must be at least 1.25.12
+    severity: error
+    scanner: gomod
+    field: go_version
+    op: gte
+    value: "1.25.12"
+    recipe: bump-go
+
+  - id: dockerfile-present
+    description: Every service must ship a Dockerfile.
+    severity: error
+    scanner: dockerfile
+    field: base_image
+    op: exists
+
+  - id: builder-image-approved
+    description: Dockerfile final image must be an approved runtime base.
+    severity: warn
+    scanner: dockerfile
+    field: base_image
+    op: matches
+    value: '^(golang:1\.(2[4-9]|[3-9][0-9])|alpine:3\.|gcr\.io/distroless/)'
+    recipe: bump-base-image
