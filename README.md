@@ -2,7 +2,7 @@
 
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/whoisnjoguu/elostirion)](https://pkg.go.dev/github.com/whoisnjoguu/elostirion)
 
-![elo scan catching drift across a demo fleet](demo/scan.gif)
+![elo catching drift across a demo fleet](demo/demo.gif)
 
 `elostirion` applies desired-state management to fleets of repositories. You write a
 single spec describing what every service must look like; base image, language
