@@ -3,14 +3,64 @@ name: enterprise-apis-fleet
 
 rules:
   - id: go-version-min
-    description: Go version in go.mod must be at least 1.25.12
+    description: Go version in go.mod must be at least 1.25.12 (fleet security baseline).
     severity: error
+    language: go
     scanner: gomod
     field: go_version
     op: gte
     value: "1.25.12"
-    recipe: bump-go
+    recipe: bump-language-version
 
+  - id: go-module-org-path
+    description: Go modules must live under the corporate GitHub organization.
+    severity: error
+    language: go
+    scanner: gomod
+    field: module
+    op: matches
+    value: '^github\.com/whoisnjoguu/'
+
+  - id: go-dependency-budget
+    description: Direct + transitive requirements in go.mod must stay under the fleet budget of 150.
+    severity: warn
+    language: go
+    scanner: gomod
+    field: require_count
+    op: lte
+    value: "150"
+
+  # ------------------------------------------------------------ Python ----
+  - id: python-version-min
+    description: pyproject.toml requires-python must target 3.12 or newer.
+    severity: error
+    language: py
+    scanner: python
+    field: requires_version
+    op: matches
+    value: '3\.1[2-9]'
+    recipe: bump-language-version
+    target: ">=3.12"
+    grace_until: "2026-10-01"
+
+  - id: python-package-manager-approved
+    description: Python services must use a lockfile-based package manager (uv or poetry), not bare pip.
+    severity: error
+    language: py
+    scanner: python
+    field: package_manager
+    op: oneof
+    values: ["uv", "poetry"]
+
+  - id: python-project-name-set
+    description: pyproject.toml must declare a project name for registry publishing.
+    severity: info
+    language: py
+    scanner: python
+    field: project_name
+    op: exists
+
+  # -------------------------------------------------------- Containers ----
   - id: dockerfile-present
     description: Every service must ship a Dockerfile.
     severity: error
@@ -24,5 +74,22 @@ rules:
     scanner: dockerfile
     field: base_image
     op: matches
-    value: '^(golang:1\.(2[4-9]|[3-9][0-9])|alpine:3\.|gcr\.io/distroless/)'
+    value: '^(golang:1\.(2[4-9]|[3-9][0-9])|python:3\.1[2-9]-slim|alpine:3\.|gcr\.io/distroless/)'
     recipe: bump-base-image
+    target: "alpine:3.22"
+
+  - id: no-floating-image-tags
+    description: Final image must be pinned; ":latest" and untagged images are forbidden.
+    severity: error
+    scanner: dockerfile
+    field: final_image
+    op: nmatches
+    value: '(:latest$|^[^:@]+$)'
+
+  - id: multi-stage-build
+    description: Images must use multi-stage builds so toolchains never ship to production.
+    severity: warn
+    scanner: dockerfile
+    field: stage_count
+    op: gte
+    value: "2"
