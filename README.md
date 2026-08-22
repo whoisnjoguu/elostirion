@@ -6,9 +6,9 @@
 
 `elostirion` applies desired-state management to fleets of repositories. You write a
 single spec describing what every service must look like; base image, language
-version, approved runtime images e.t.c and `elostirion` scans your repos against it
-and verifies them in CI, so drift is caught before it merges. Convergence pull
-requests and Terraform drift detection are next; see the [roadmap](#roadmap).
+version, approved runtime images e.t.c and `elostirion` scans your repos against it,
+verifies them in CI so drift is caught before it merges, and opens the pull
+requests that converge digressing repos back to spec.
 
 ## Why?
 
@@ -32,22 +32,33 @@ You can also install from source using `go install`:
     go install github.com/whoisnjoguu/elostirion/cmd/elo@latest
 
 The CLI reads a fleet spec (`fleet-spec.yaml`) and operates on one or more repositories.
-The spec can be a local path or a remote git URL pinned to a ref.
+The spec is a local path today; remote `git::` specs are planned
+([#8](https://github.com/whoisnjoguu/elostirion/issues/8)).
 
 The common arguments are:
 
-- The `--spec` flag to specify the spec, local or `git::` URL
+- The `--spec` flag to specify the spec file
 - The `--format` flag to pick the output: text, json, junit, or sarif
 - The `--fail-on` flag to set the minimum severity that fails the run
 
 For example, verify the current repository in CI:
 
-    $ elo verify --spec git::https://github.com/<your-org-name>/fleet-spec.git
+    $ elo verify --spec fleet-spec.yaml
+
+Verify a remote GitHub repository through the API, without cloning (set
+`GITHUB_TOKEN` for private repos, `--ref` for a branch, tag, or SHA):
+
+    $ elo verify some-org/some-repo --spec fleet-spec.yaml
 
 Scan a directory of repositories (each immediate subdirectory is a repo) and
 report which ones digress from the spec:
 
     $ elo scan --spec ./fleet-spec.yaml ~/src
+
+Show the diffs that would fix the digressing repos, then open the pull requests:
+
+    $ elo plan --spec ./fleet-spec.yaml ~/src
+    $ GITHUB_TOKEN=... elo apply --spec ./fleet-spec.yaml ~/src
 
 See the CLI help (`-h` or `--help`) or below for full details.
 
@@ -55,18 +66,24 @@ See the CLI help (`-h` or `--help`) or below for full details.
 
 ### Commands
 
-    verify   Check a single repository against the spec. Exits non-zero on
-             violations. Intended as a CI step.
+    verify   Check a single repository against the spec. Works on a local
+             checkout or a remote GitHub repo (owner/name or URL) read through
+             the API without cloning. Exits non-zero on violations. Intended
+             as a CI step.
 
     scan     Read many repositories and report where they diverge from the
              spec, without making changes.
 
-    apply    Evaluate repositories and print the change plan each violated
-             rule's recipe would produce. The pull-request write path is in
-             progress; see the roadmap.
+    plan     Run the recipes of violated rules and print the unified diff of
+             the edits apply would commit. A dry-run of apply.
 
-    drift    Reserved for Terraform drift detection; not yet implemented.
-             See the roadmap.
+    apply    Open pull requests that converge repositories to the spec, using
+             generic recipes (bump-language-version, bump-base-image). On
+             GitHub the commit is created through the Git Data API; no clone.
+             Bitbucket and GitLab backends are planned.
+
+    spec     Author and check specs: init, validate, fmt.
+
 
 ### Full
 
@@ -81,8 +98,8 @@ See the CLI help (`-h` or `--help`) or below for full details.
 
     Common options:
 
-      -s, --spec=path|url     The fleet spec. A local path or a 'git::' URL
-                             with an optional '@ref' suffix. Required.
+      -s, --spec=path         The fleet spec, a local file path. Required.
+                             (Remote 'git::' specs are planned; see roadmap.)
 
       -f, --format=fmt        Output format: text, json, junit, or sarif.
                              junit surfaces results in Bitbucket's test report
@@ -107,18 +124,24 @@ See the CLI help (`-h` or `--help`) or below for full details.
 
 ## Roadmap
 
-The near-term work, in rough order:
+The near-term work, in rough order (tracked in the
+[issues](https://github.com/whoisnjoguu/elostirion/issues)):
 
-- **`apply` write path** — `apply` already computes per-repo change plans from
-  recipes; opening the pull requests on GitHub and Bitbucket is in progress.
-  Until then it reports what it would open (use `--dry-run`).
-- **Terraform drift** — `drift` will three-way diff Terraform roots (HEAD,
-  state, cloud) to fill the standalone drift-detection gap left by driftctl.
-- **Remote scanning** — `--org` / `--repo` flags so `scan` can read every
-  repository in a GitHub or Bitbucket org over the API (with `GITHUB_TOKEN` /
-  `BITBUCKET_TOKEN`) instead of local checkouts.
-- **More scanners** — Go, Python, and Dockerfile ship today; pipeline shape,
-  required files, and env contracts are next.
+- **Bitbucket pull requests** — `apply` opens PRs on GitHub today; the
+  Bitbucket backend is next
+  ([#3](https://github.com/whoisnjoguu/elostirion/issues/3)).
+- **Terraform drift** — `drift` will diff Terraform roots against state to
+  fill the standalone drift-detection gap left by driftctl
+  ([#7](https://github.com/whoisnjoguu/elostirion/issues/7)).
+- **Org-wide remote scanning** — `elo scan --remote github.com/<org>` to sweep
+  every repository in an org over the API, no checkouts
+  ([#6](https://github.com/whoisnjoguu/elostirion/issues/6)).
+- **Remote specs** — reference one central `fleet-spec.yaml` by `git::` URL
+  pinned to a ref ([#8](https://github.com/whoisnjoguu/elostirion/issues/8)).
+- **More scanners** — Go, Python, and Dockerfile ship today; node, pipeline
+  shape, and env contracts are next
+  ([#4](https://github.com/whoisnjoguu/elostirion/issues/4),
+  [#5](https://github.com/whoisnjoguu/elostirion/issues/5)).
 
 ## CI integration
 
@@ -132,7 +155,7 @@ Bitbucket Pipelines:
         script:
           - go install github.com/whoisnjoguu/elostirion/cmd/elo@latest
           - mkdir -p test-results
-          - elo verify --spec git::https://bitbucket.org/<your-org-name>/fleet-spec.git@v1 --format junit > test-results/elo.xml
+          - elo verify --spec fleet-spec.yaml --format junit > test-results/elo.xml
 
 GitHub Actions:
 
@@ -168,7 +191,8 @@ evaluates a spec against scanned facts.
 
 ## Stability
 
-Alpha. The spec format, the CLI, and the library interface may all change.
+Alpha (v0.1.0). The spec format, the CLI, and the library interface may all
+change.
 
 ## Contributing
 
