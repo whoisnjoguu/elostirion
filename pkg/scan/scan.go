@@ -112,9 +112,32 @@ func selectScanners(langs ...string) []Scanner {
 	return out
 }
 
+// DetectLanguages reports the languages whose marker files are present in repo root
+func DetectLanguages(fsys fs.FS) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range Registered() {
+		m, ok := s.(Meta)
+		if !ok || m.Language() == "" || seen[m.Language()] {
+			continue
+		}
+		for _, marker := range m.Markers() {
+			if f, err := fsys.Open(marker); err == nil {
+				_ = f.Close()
+				seen[m.Language()] = true
+				out = append(out, m.Language())
+				break
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Run executes the scanners for the given languages against fsys and returns collected Facts
 func Run(fsys fs.FS, repo model.Repo, langs ...string) (*model.Facts, error) {
 	facts := model.NewFacts(repo)
+	facts.Languages = DetectLanguages(fsys)
 	var errs []error
 	for _, s := range selectScanners(langs...) {
 		if err := s.Scan(fsys, facts); err != nil {
