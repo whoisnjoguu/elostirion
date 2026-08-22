@@ -71,3 +71,29 @@ func TestOneOfAndMatches(t *testing.T) {
 		t.Fatalf("want 2 findings, got %d", len(got))
 	}
 }
+
+func TestLanguageGating(t *testing.T) {
+	s := &spec.Spec{
+		Version: 1,
+		Rules: []spec.Rule{
+			{ID: "go-min", Severity: model.SeverityError, Language: "go", Scanner: "gomod", Field: "go_version", Op: spec.OpGTE, Value: "1.24"},
+			{ID: "py-min", Severity: model.SeverityError, Language: "py", Scanner: "python", Field: "requires_version", Op: spec.OpExists},
+			{ID: "df-exists", Severity: model.SeverityError, Scanner: "dockerfile", Field: "base_image", Op: spec.OpExists},
+		},
+	}
+
+	// A Go-only repo: the py rule must be skipped, not reported as missing.
+	facts := model.NewFacts(model.Repo{Name: "svc"})
+	facts.Languages = []string{"go"}
+	facts.Set("gomod.go_version", "1.23", model.Location{File: "go.mod"})
+
+	findings := Evaluate(s, facts)
+	if len(findings) != 2 {
+		t.Fatalf("got %d findings, want 2: %+v", len(findings), findings)
+	}
+	for _, f := range findings {
+		if f.RuleID == "py-min" {
+			t.Errorf("py rule evaluated for a go-only repo: %+v", f)
+		}
+	}
+}

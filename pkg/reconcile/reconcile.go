@@ -15,6 +15,9 @@ import (
 func Evaluate(s *spec.Spec, facts *model.Facts) []model.Finding {
 	var findings []model.Finding
 	for _, rule := range s.Rules {
+		if rule.Language != "" && !facts.HasLanguage(rule.Language) {
+			continue
+		}
 		if f, ok := evalRule(rule, facts); ok {
 			findings = append(findings, f)
 		}
