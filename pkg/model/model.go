@@ -45,9 +45,20 @@ func (r Repo) Slug() string {
 
 // Facts are the attributes a set of scanners extracted from one repository
 type Facts struct {
-	Repo    Repo
-	Values  map[string]any
-	Sources map[string]Location
+	Repo      Repo
+	Languages []string // detected in the repository by marker files
+	Values    map[string]any
+	Sources   map[string]Location
+}
+
+// HasLanguage reports whether lang was detected in the repository.
+func (f *Facts) HasLanguage(lang string) bool {
+	for _, l := range f.Languages {
+		if l == lang {
+			return true
+		}
+	}
+	return false
 }
 
 // NewFacts returns an initialised Facts for a repository.
