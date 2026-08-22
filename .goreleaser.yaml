@@ -1,0 +1,69 @@
+version: 2
+
+project_name: elostirion
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: elo
+    binary: elo
+    main: ./cmd/elo
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/whoisnjoguu/elostirion/internal/version.Version={{ .Version }}
+      - -X github.com/whoisnjoguu/elostirion/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/whoisnjoguu/elostirion/internal/version.Date={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev"
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat(\(.*\))?!?:'
+      order: 0
+    - title: Bug fixes
+      regexp: '^fix(\(.*\))?!?:'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^docs"
+      - "^test"
+      - "^chore"
+      - "^ci"
+
+release:
+  mode: keep-existing
