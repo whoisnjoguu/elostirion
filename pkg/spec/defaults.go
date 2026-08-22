@@ -1,3 +1,4 @@
+// Package spec loads and validates fleet specifications.
 package spec
 
 // DefaultTemplate is a starter fleet-spec.yaml written by `elo spec init`. It targets
