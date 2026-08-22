@@ -33,13 +33,15 @@ type Rule struct {
 	ID          string         `yaml:"id"`
 	Description string         `yaml:"description,omitempty"`
 	Severity    model.Severity `yaml:"severity"`
-	Scanner     string         `yaml:"scanner"`
-	Field       string         `yaml:"field"`
-	Op          Op             `yaml:"op"`
-	Value       string         `yaml:"value,omitempty"`
-	Values      []string       `yaml:"values,omitempty"`
-	GraceUntil  string         `yaml:"grace_until,omitempty"`
-	Recipe      string         `yaml:"recipe,omitempty"`
+	Language   string   `yaml:"language,omitempty"`
+	Scanner    string   `yaml:"scanner"`
+	Field      string   `yaml:"field"`
+	Op         Op       `yaml:"op"`
+	Value      string   `yaml:"value,omitempty"`
+	Values     []string `yaml:"values,omitempty"`
+	GraceUntil string   `yaml:"grace_until,omitempty"`
+	Recipe     string   `yaml:"recipe,omitempty"`
+	Target string `yaml:"target,omitempty"`
 }
 
 // Key returns the "scanner.field" fact key this rule inspects.
@@ -81,6 +83,14 @@ func (s *Spec) Validate() error {
 		}
 		if r.Op == OpOneOf && len(r.Values) == 0 {
 			return fmt.Errorf("spec: rule %q uses op oneof but has no values", r.ID)
+		}
+		if r.Recipe != "" && r.Target == "" {
+			switch r.Op {
+			case OpEquals, OpGTE, OpLTE:
+				// value is concrete; usable as the target
+			default:
+				return fmt.Errorf("spec: rule %q has recipe %q but no target; set target: to the concrete value to converge to", r.ID, r.Recipe)
+			}
 		}
 	}
 	return nil
