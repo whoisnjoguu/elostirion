@@ -55,7 +55,7 @@ func originURL(configPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("vcs: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	inOrigin := false
 	sc := bufio.NewScanner(f)

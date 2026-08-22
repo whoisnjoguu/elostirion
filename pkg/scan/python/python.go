@@ -85,7 +85,7 @@ func readFile(fsys fs.FS, name string) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var b strings.Builder
 	buf := make([]byte, 4096)
 	for {

@@ -14,7 +14,6 @@ import (
 
 // Global flag values shared by subcommands.
 var (
-	cfgFile    string
 	specFlag   string
 	formatFlag string
 	failOn     string

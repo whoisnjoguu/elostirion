@@ -1,3 +1,4 @@
+// Package reconcile plans edits that bring repositories into spec compliance.
 package reconcile
 
 import (

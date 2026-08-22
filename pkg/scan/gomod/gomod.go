@@ -30,7 +30,7 @@ func (Scanner) Scan(fsys fs.FS, facts *model.Facts) error {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	data, err := io.ReadAll(f)
 	if err != nil {

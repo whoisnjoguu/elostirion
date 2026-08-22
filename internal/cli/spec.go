@@ -60,7 +60,7 @@ var specFmtCmd = &cobra.Command{
 		if err != nil {
 			return failure("marshal spec: %v", err)
 		}
-		os.Stdout.Write(out)
+		_, _ = os.Stdout.Write(out)
 		return nil
 	},
 }

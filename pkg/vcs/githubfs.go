@@ -1,3 +1,4 @@
+// Package vcs provides filesystem access to local and remote repositories.
 package vcs
 
 import (
@@ -14,10 +15,10 @@ import (
 // GitHubFS is a read-only fs.FS over a repository tree fetched through the
 // GitHub Git Data API, so scanners can read remote repos without cloning
 type GitHubFS struct {
-	ctx    context.Context
-	client *github.Client
-	owner  string
-	name   string
+	ctx       context.Context
+	client    *github.Client
+	owner     string
+	name      string
 	rootTree  string
 	treeCache map[string]*github.Tree
 }

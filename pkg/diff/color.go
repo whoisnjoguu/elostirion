@@ -1,3 +1,4 @@
+// Package diff renders unified diffs and colorizes them for the terminal.
 package diff
 
 import (

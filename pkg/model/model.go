@@ -1,8 +1,10 @@
+// Package model defines the core scan facts, findings, and severities.
 package model
 
 // Severity classifies how serious a Finding is
 type Severity string
 
+// Severity levels ordered from most to least serious.
 const (
 	SeverityError Severity = "error" // blocks
 	SeverityWarn  Severity = "warn"  // annotates but does not block by default

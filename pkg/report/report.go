@@ -1,3 +1,4 @@
+// Package report renders scan findings in text, JSON, JUnit, and SARIF formats.
 package report
 
 import (

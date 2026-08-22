@@ -13,8 +13,10 @@ type Spec struct {
 	Rules   []Rule `yaml:"rules"`
 }
 
+// Op is a comparison operator applied by a rule.
 type Op string
 
+// Comparison operators supported by rule expressions.
 const (
 	OpEquals     Op = "eq"       // observed == value
 	OpNotEquals  Op = "ne"       // observed != value
@@ -33,15 +35,15 @@ type Rule struct {
 	ID          string         `yaml:"id"`
 	Description string         `yaml:"description,omitempty"`
 	Severity    model.Severity `yaml:"severity"`
-	Language   string   `yaml:"language,omitempty"`
-	Scanner    string   `yaml:"scanner"`
-	Field      string   `yaml:"field"`
-	Op         Op       `yaml:"op"`
-	Value      string   `yaml:"value,omitempty"`
-	Values     []string `yaml:"values,omitempty"`
-	GraceUntil string   `yaml:"grace_until,omitempty"`
-	Recipe     string   `yaml:"recipe,omitempty"`
-	Target string `yaml:"target,omitempty"`
+	Language    string         `yaml:"language,omitempty"`
+	Scanner     string         `yaml:"scanner"`
+	Field       string         `yaml:"field"`
+	Op          Op             `yaml:"op"`
+	Value       string         `yaml:"value,omitempty"`
+	Values      []string       `yaml:"values,omitempty"`
+	GraceUntil  string         `yaml:"grace_until,omitempty"`
+	Recipe      string         `yaml:"recipe,omitempty"`
+	Target      string         `yaml:"target,omitempty"`
 }
 
 // Key returns the "scanner.field" fact key this rule inspects.

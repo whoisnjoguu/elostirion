@@ -1,3 +1,4 @@
+// Package scan discovers repositories and runs language scanners over them.
 package scan
 
 import (

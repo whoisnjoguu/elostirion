@@ -94,7 +94,7 @@ func renderAndExit(rep *report.Report) error {
 	if err != nil {
 		return failure("%v", err)
 	}
-	os.Stdout.Write(out)
+	_, _ = os.Stdout.Write(out)
 	if rep.ExceedsThreshold(thresholdSeverity()) {
 		return findingsExit()
 	}
