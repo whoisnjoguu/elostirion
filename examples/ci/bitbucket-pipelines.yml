@@ -1,0 +1,16 @@
+# Example: run elostirion as a conformance gate in Bitbucket Pipelines.
+#
+# The step checks the current repository against a shared fleet spec and writes
+# a JUnit report so results appear in Bitbucket's test report UI. The build fails
+# when any finding is at or above the --fail-on severity.
+pipelines:
+  default:
+    - step:
+        name: Fleet conformance
+        image: golang:1.25
+        script:
+          - go install github.com/whoisnjoguu/elostirion/cmd/elo@latest
+          - mkdir -p test-results
+          - elo verify --spec fleet-spec.yaml --format junit --fail-on error > test-results/elo.xml
+        artifacts:
+          - test-results/**

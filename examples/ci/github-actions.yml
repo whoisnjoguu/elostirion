@@ -1,0 +1,30 @@
+# Example: run elostirion as a conformance gate in GitHub Actions.
+#
+# The job verifies the current repository against a shared fleet spec and uploads
+# a SARIF report so findings annotate the pull request diff via code scanning.
+name: fleet-conformance
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: Install elo
+        run: go install github.com/whoisnjoguu/elostirion/cmd/elo@latest
+      - name: Verify
+        run: elo verify --spec fleet-spec.yaml --format sarif --fail-on error > elo.sarif
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: elo.sarif
