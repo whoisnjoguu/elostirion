@@ -8,10 +8,10 @@ func TestParseRemote(t *testing.T) {
 		provider, owner, name string
 	}{
 		{"git@github.com:whoisnjoguu/elostirion.git", "github", "whoisnjoguu", "elostirion"},
-		{"https://github.com/Prescott-Data/nexus-framework.git", "github", "Prescott-Data", "nexus-framework"},
-		{"https://github.com/Prescott-Data/nexus-framework", "github", "Prescott-Data", "nexus-framework"},
-		{"git@bitbucket.org:prescott/auth-api.git", "bitbucket", "prescott", "auth-api"},
-		{"https://user@bitbucket.org/prescott/auth-api.git", "bitbucket", "prescott", "auth-api"},
+		{"https://github.com/torvalds/linux.git", "github", "torvalds", "linux"},
+		{"https://github.com/torvalds/linux", "github", "torvalds", "linux"},
+		{"git@bitbucket.org:atlassian/localstack.git", "bitbucket", "atlassian", "localstack"},
+		{"https://user@bitbucket.org/atlassian/localstack.git", "bitbucket", "atlassian", "localstack"},
 		{"ssh://git@gitlab.com/group/proj.git", "gitlab", "group", "proj"},
 	}
 	for _, c := range cases {
