@@ -17,7 +17,12 @@ linters:
   settings:
     errcheck:
       exclude-functions:
+        - fmt.Fprint(os.Stdout)
+        - fmt.Fprint(os.Stderr)
+        - fmt.Fprintf(os.Stdout)
+        - fmt.Fprintf(os.Stderr)
         - fmt.Fprintln(os.Stdout)
+        - fmt.Fprintln(os.Stderr)
     revive:
       rules:
         - name: blank-imports
