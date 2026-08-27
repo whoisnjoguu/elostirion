@@ -1,13 +1,28 @@
 package cli
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/whoisnjoguu/elostirion/pkg/forge"
+	"github.com/whoisnjoguu/elostirion/pkg/model"
+	"github.com/whoisnjoguu/elostirion/pkg/reconcile"
 	"github.com/whoisnjoguu/elostirion/pkg/report"
 	"github.com/whoisnjoguu/elostirion/pkg/scan"
+	"github.com/whoisnjoguu/elostirion/pkg/spec"
+	"github.com/whoisnjoguu/elostirion/pkg/vcs"
+	pkgreader "github.com/whoisnjoguu/elostirion/pkg/reader"
+)
+
+// Remote scan targets.
+var (
+	remoteFlag []string
+	orgFlag    string
 )
 
 // scanCmd reads many repositories and reports where they diverge from the spec without making changes
@@ -28,12 +43,25 @@ restrict which scanners run.`,
 
 func init() {
 	rootCmd.AddCommand(scanCmd)
+
+	scanCmd.Flags().StringSliceVar(&remoteFlag, "remote", nil,
+		"scan a remote repository directly without a clone, e.g. github.com/acme/api (repeatable)")
+	scanCmd.Flags().StringVar(&orgFlag, "org", "",
+		"scan every repository in an organisation, e.g. github.com/acme")
+	scanCmd.MarkFlagsMutuallyExclusive("remote", "org")
 }
 
 func runScan(cmd *cobra.Command, args []string) error {
 	s, err := loadSpec()
 	if err != nil {
 		return err
+	}
+
+	if len(remoteFlag) > 0 || orgFlag != "" {
+		if len(args) > 0 {
+			return failure("--remote and --org cannot be combined with directory arguments")
+		}
+		return runScanRemote(s)
 	}
 
 	roots := args
@@ -59,6 +87,113 @@ func runScan(cmd *cobra.Command, args []string) error {
 		rep.Add(repo, findings)
 	}
 	return renderAndExit(rep)
+}
+
+// runScanRemote audits repositories read directly from a provider API.
+func runScanRemote(s *spec.Spec) error {
+	ctx := context.Background()
+	repos, err := remoteTargets(ctx)
+	if err != nil {
+		return err
+	}
+	if len(repos) == 0 {
+		return failure("no repositories to scan")
+	}
+
+	rep := &report.Report{SpecName: s.Name}
+	for _, repo := range repos {
+		reader, err := pkgreader.ReaderFor(repo, forge.Config{Token: resolveToken(repo.Provider)})
+		if err != nil {
+			return failure("%v", err)
+		}
+		// listing the root authenticates the reader and drives marker filtering
+		entries, err := reader.ListFiles(ctx, "")
+		if err != nil {
+			return failure("%s: %v", repo.Slug(), err)
+		}
+		if len(languages) > 0 && !hasMarker(entries, languages) {
+			continue // no relevant marker for the selected languages
+		}
+		facts, err := scan.Run(pkgreader.FS(ctx, reader), repo, languages...)
+		if err != nil {
+			return failure("scan %s: %v", repo.Slug(), err)
+		}
+		rep.Add(facts.Repo, reconcile.Evaluate(s, facts))
+	}
+	return renderAndExit(rep)
+}
+
+// remoteTargets resolves the --remote or --org flags into repositories to scan.
+func remoteTargets(ctx context.Context) ([]model.Repo, error) {
+	if orgFlag != "" {
+		provider, org, err := parseOrg(orgFlag)
+		if err != nil {
+			return nil, failure("%v", err)
+		}
+		repos, err := pkgreader.ListOrgRepos(ctx, provider, org, forge.Config{Token: resolveToken(provider)})
+		if err != nil {
+			return nil, failure("list org %s: %v", org, err)
+		}
+		return repos, nil
+	}
+	repos := make([]model.Repo, 0, len(remoteFlag))
+	for _, r := range remoteFlag {
+		repo, err := parseRemoteRepo(r)
+		if err != nil {
+			return nil, failure("%v", err)
+		}
+		repos = append(repos, repo)
+	}
+	return repos, nil
+}
+
+// parseRemoteRepo parses a host/owner/name target into a Repo.
+func parseRemoteRepo(s string) (model.Repo, error) {
+	provider, owner, name, err := vcs.ParseRemote("https://" + stripScheme(s))
+	if err != nil {
+		return model.Repo{}, fmt.Errorf("invalid --remote %q: %w", s, err)
+	}
+	return model.Repo{Provider: provider, Owner: owner, Name: name}, nil
+}
+
+// parseOrg parses a host/org target into a provider and organisation name.
+func parseOrg(s string) (provider, org string, err error) {
+	parts := strings.Split(strings.Trim(stripScheme(s), "/"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", fmt.Errorf("invalid --org %q; want host/org, e.g. github.com/acme", s)
+	}
+	switch parts[0] {
+	case "github.com":
+		provider = "github"
+	case "bitbucket.org":
+		provider = "bitbucket"
+	default:
+		provider = parts[0]
+	}
+	return provider, parts[1], nil
+}
+
+// stripScheme removes a leading http(s):// from a target.
+func stripScheme(s string) string {
+	s = strings.TrimPrefix(s, "https://")
+	s = strings.TrimPrefix(s, "http://")
+	return s
+}
+
+// hasMarker reports whether any root entry is a discovery marker for langs.
+func hasMarker(entries []pkgreader.DirEntry, langs []string) bool {
+	present := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		if !e.IsDir {
+			present[e.Name] = true
+		}
+	}
+	for _, m := range scan.MarkersFor(langs...) {
+		if present[m] {
+			return true
+		}
+	}
+	return false
 }
 
 // collectRepos expands each root into the repositories to scan
