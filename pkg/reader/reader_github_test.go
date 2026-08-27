@@ -142,17 +142,17 @@ func TestGitHubOrgRepos(t *testing.T) {
 }
 
 func TestGitHubNoTokenAllowsPublicRepos(t *testing.T) {
-	r, err := ReaderFor(model.Repo{Provider: "github", Owner: "acme", Name: "api"}, forge.Config{})
+	r, err := For(model.Repo{Provider: "github", Owner: "acme", Name: "api"}, forge.Config{})
 	if err != nil {
-		t.Fatalf("ReaderFor without token = %v, want nil (public repos need no token)", err)
+		t.Fatalf("For without token = %v, want nil (public repos need no token)", err)
 	}
 	if r == nil {
-		t.Fatal("ReaderFor returned nil reader")
+		t.Fatal("For returned nil reader")
 	}
 }
 
-func TestReaderForUnknownProvider(t *testing.T) {
-	_, err := ReaderFor(model.Repo{Provider: "svn"}, forge.Config{Token: "t"})
+func TestForUnknownProvider(t *testing.T) {
+	_, err := For(model.Repo{Provider: "svn"}, forge.Config{Token: "t"})
 	if err == nil {
 		t.Fatal("expected error for unknown provider")
 	}
