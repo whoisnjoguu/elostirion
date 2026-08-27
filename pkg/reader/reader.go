@@ -1,3 +1,4 @@
+// Package reader provides remote repository readers for supported VCS providers.
 package reader
 
 import (
@@ -33,8 +34,8 @@ type AuthError struct {
 
 func (e *AuthError) Error() string { return fmt.Sprintf("forge/%s: %s", e.Provider, e.Msg) }
 
-// ReaderFor returns a RemoteReader for the repo's provider.
-func ReaderFor(repo model.Repo, cfg forge.Config) (RemoteReader, error) {
+// For returns a RemoteReader for the repo's provider.
+func For(repo model.Repo, cfg forge.Config) (RemoteReader, error) {
 	switch repo.Provider {
 	case "github":
 		return newGitHubReader(repo, cfg)

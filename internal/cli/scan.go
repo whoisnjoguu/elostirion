@@ -11,12 +11,12 @@ import (
 
 	"github.com/whoisnjoguu/elostirion/pkg/forge"
 	"github.com/whoisnjoguu/elostirion/pkg/model"
+	pkgreader "github.com/whoisnjoguu/elostirion/pkg/reader"
 	"github.com/whoisnjoguu/elostirion/pkg/reconcile"
 	"github.com/whoisnjoguu/elostirion/pkg/report"
 	"github.com/whoisnjoguu/elostirion/pkg/scan"
 	"github.com/whoisnjoguu/elostirion/pkg/spec"
 	"github.com/whoisnjoguu/elostirion/pkg/vcs"
-	pkgreader "github.com/whoisnjoguu/elostirion/pkg/reader"
 )
 
 // Remote scan targets.
@@ -102,7 +102,7 @@ func runScanRemote(s *spec.Spec) error {
 
 	rep := &report.Report{SpecName: s.Name}
 	for _, repo := range repos {
-		reader, err := pkgreader.ReaderFor(repo, forge.Config{Token: resolveToken(repo.Provider)})
+		reader, err := pkgreader.For(repo, forge.Config{Token: resolveToken(repo.Provider)})
 		if err != nil {
 			return failure("%v", err)
 		}
