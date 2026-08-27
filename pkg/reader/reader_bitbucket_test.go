@@ -123,11 +123,11 @@ func TestBitbucketAuthError(t *testing.T) {
 }
 
 func TestBitbucketNoTokenAllowsPublicRepos(t *testing.T) {
-	r, err := ReaderFor(model.Repo{Provider: "bitbucket", Owner: "acme", Name: "api"}, forge.Config{})
+	r, err := For(model.Repo{Provider: "bitbucket", Owner: "acme", Name: "api"}, forge.Config{})
 	if err != nil {
-		t.Fatalf("ReaderFor without token = %v, want nil (public repos need no token)", err)
+		t.Fatalf("For without token = %v, want nil (public repos need no token)", err)
 	}
 	if r == nil {
-		t.Fatal("ReaderFor returned nil reader")
+		t.Fatal("For returned nil reader")
 	}
 }
