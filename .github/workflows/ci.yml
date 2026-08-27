@@ -36,6 +36,18 @@ jobs:
       - run: go build ./...
       - run: go test -race -shuffle=on ./...
 
+  deps-security-check:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: go.mod
+
   goreleaser-check:
     name: goreleaser check
     runs-on: ubuntu-latest
