@@ -10,8 +10,11 @@ import (
 
 // Load reads and validates a spec from a source
 func Load(source string) (*Spec, error) {
-	if strings.HasPrefix(source, "git::") {
-		return nil, fmt.Errorf("spec: remote git sources are not yet supported (%q); clone the spec and pass a local path", source)
+	switch {
+	case strings.HasPrefix(source, "git::"):
+		return loadGit(source)
+	case strings.HasPrefix(source, "http://"), strings.HasPrefix(source, "https://"):
+		return loadURL(source)
 	}
 	data, err := os.ReadFile(source)
 	if err != nil {
