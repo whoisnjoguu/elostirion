@@ -32,7 +32,8 @@ You can also install from source using `go install`:
     go install github.com/whoisnjoguu/elostirion/cmd/elo@latest
 
 The CLI reads a fleet spec (`fleet-spec.yaml`) and operates on one or more repositories.
-The spec is a local path today; remote `git::` specs are planned
+The `--spec` can be a local path, a `git::` URL, or any http(s) URL — including a
+GitHub file link — so every repo can pin one central spec at a ref
 ([#8](https://github.com/whoisnjoguu/elostirion/issues/8)).
 
 The common arguments are:
@@ -44,6 +45,18 @@ The common arguments are:
 For example, verify the current repository in CI:
 
     $ elo verify --spec fleet-spec.yaml
+
+Reference a spec hosted in a GitHub repository instead of a local file, so every
+repo pins one central spec at a ref (read through the GitHub API — no checkout of
+the spec repo; set `GITHUB_TOKEN` for a private spec repo):
+
+    $ elo verify --spec 'git::https://github.com/some-org/policies//fleet.yaml?ref=v1.2.0'
+
+You can also pass a copied GitHub file link or any other http(s) URL; a plain URL
+is fetched directly (set `ELO_SPEC_TOKEN` to send a bearer token):
+
+    $ elo verify --spec https://github.com/some-org/policies/blob/main/fleet.yaml
+    $ elo verify --spec https://specs.example.com/fleet.yaml
 
 Verify a remote GitHub repository through the API, without cloning (set
 `GITHUB_TOKEN` for private repos, `--ref` for a branch, tag, or SHA):
@@ -98,8 +111,10 @@ See the CLI help (`-h` or `--help`) or below for full details.
 
     Common options:
 
-      -s, --spec=path         The fleet spec, a local file path. Required.
-                             (Remote 'git::' specs are planned; see roadmap.)
+      -s, --spec=src          The fleet spec. Required. A local file path, a
+                             git:: URL, or an http(s) URL (including a GitHub
+                             file link) pinned to a ref. Set GITHUB_TOKEN for
+                             private GitHub specs.
 
       -f, --format=fmt        Output format: text, json, junit, or sarif.
                              junit surfaces results in Bitbucket's test report
@@ -136,8 +151,6 @@ The near-term work, in rough order (tracked in the
 - **Org-wide remote scanning** — `elo scan --remote github.com/<org>` to sweep
   every repository in an org over the API, no checkouts
   ([#6](https://github.com/whoisnjoguu/elostirion/issues/6)).
-- **Remote specs** — reference one central `fleet-spec.yaml` by `git::` URL
-  pinned to a ref ([#8](https://github.com/whoisnjoguu/elostirion/issues/8)).
 - **More scanners** — Go, Python, and Dockerfile ship today; node, pipeline
   shape, and env contracts are next
   ([#4](https://github.com/whoisnjoguu/elostirion/issues/4),
