@@ -50,7 +50,7 @@ func validateLanguages(cmd *cobra.Command, args []string) error {
 // loadSpec resolves the --spec flag into a parsed spec.
 func loadSpec() (*spec.Spec, error) {
 	if specFlag == "" {
-		return nil, failure("no spec provided; pass --spec <path|git:: URL>")
+		return nil, failure("no spec provided; pass --spec <path|git:: URL|http(s) URL>")
 	}
 	s, err := spec.Load(specFlag)
 	if err != nil {

@@ -51,7 +51,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&specFlag, "spec", "s", "", "fleet spec: local path or git:: URL")
+	rootCmd.PersistentFlags().StringVarP(&specFlag, "spec", "s", "", "fleet spec: local path, git:: URL, or http(s) URL")
 	rootCmd.PersistentFlags().StringVarP(&formatFlag, "format", "f", "text", "output format: text, json, junit, sarif")
 	rootCmd.PersistentFlags().StringVar(&failOn, "fail-on", "error", "minimum severity that fails: error, drift, warn")
 	rootCmd.PersistentFlags().StringSliceVarP(&languages, "language", "l", nil, "languages to scan (for example go, py); repeatable or comma-separated. Default: all")
