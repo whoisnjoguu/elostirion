@@ -75,7 +75,7 @@ func (sarifRenderer) Render(r *Report) ([]byte, error) {
 			result := sarifResult{
 				RuleID:  f.RuleID,
 				Level:   sarifLevel(f.Severity),
-				Message: sarifMessage{Text: fmt.Sprintf("%s (got %q, want %q)", f.Message, f.Got, f.Want)},
+				Message: sarifMessage{Text: sarifText(f)},
 			}
 			if f.Location.File != "" {
 				loc := sarifLocation{PhysicalLocation: sarifPhysical{
@@ -99,6 +99,14 @@ func (sarifRenderer) Render(r *Report) ([]byte, error) {
 		return nil, fmt.Errorf("report: marshal sarif: %w", err)
 	}
 	return append(data, '\n'), nil
+}
+
+// sarifText builds the result message, appending got/want only when present.
+func sarifText(f model.Finding) string {
+	if f.Got == "" && f.Want == "" {
+		return f.Message
+	}
+	return fmt.Sprintf("%s (got %q, want %q)", f.Message, f.Got, f.Want)
 }
 
 // sarifLevel maps a severity to a SARIF level. GitHub understands

@@ -67,11 +67,25 @@ func (junitRenderer) Render(r *Report) ([]byte, error) {
 }
 
 func junitDetail(f model.Finding) string {
-	loc := f.Location.File
-	if f.Location.Line > 0 {
-		loc = fmt.Sprintf("%s:%d", f.Location.File, f.Location.Line)
+	s := f.RuleID
+	if f.Got != "" || f.Want != "" {
+		s += fmt.Sprintf(": got %q, want %q", f.Got, f.Want)
 	}
-	return fmt.Sprintf("%s: got %q, want %q (%s)", f.RuleID, f.Got, f.Want, loc)
+	if loc := locString(f.Location); loc != "" {
+		s += fmt.Sprintf(" (%s)", loc)
+	}
+	return s
+}
+
+// locString renders a location as file:line, file, or empty.
+func locString(l model.Location) string {
+	if l.File == "" {
+		return ""
+	}
+	if l.Line > 0 {
+		return fmt.Sprintf("%s:%d", l.File, l.Line)
+	}
+	return l.File
 }
 
 func nonEmpty(s, fallback string) string {

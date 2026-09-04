@@ -36,7 +36,7 @@ func (jsonRenderer) Render(r *Report) ([]byte, error) {
 		out.MaxSev = string(sev)
 	}
 	for _, res := range r.Results {
-		jr := jsonRepo{Repo: res.Repo.Slug()}
+		jr := jsonRepo{Repo: res.Repo.Slug(), Findings: []jsonFinding{}}
 		for _, f := range res.Findings {
 			jr.Findings = append(jr.Findings, jsonFinding{
 				RuleID:   f.RuleID,
