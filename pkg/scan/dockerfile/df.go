@@ -53,6 +53,10 @@ func (Scanner) Scan(fsys fs.FS, facts *model.Facts) error {
 	stageCount := 0
 	lastLine := 0
 
+	// Track the build stage separately from the final (runtime) stage
+	var firstImage, builderImage string
+	firstLine, builderLine := 0, 0
+
 	sc := bufio.NewScanner(f)
 	line := 0
 	for sc.Scan() {
@@ -71,7 +75,14 @@ func (Scanner) Scan(fsys fs.FS, facts *model.Facts) error {
 		}
 		// Record the stage alias if present: FROM <image> AS <name>
 		if len(fields) >= 4 && strings.EqualFold(fields[2], "AS") {
-			stages[strings.ToLower(fields[3])] = image
+			name := strings.ToLower(fields[3])
+			stages[name] = image
+			if name == "builder" {
+				builderImage, builderLine = image, line
+			}
+		}
+		if stageCount == 0 {
+			firstImage, firstLine = image, line
 		}
 		finalImage = image
 		stageCount++
@@ -88,5 +99,11 @@ func (Scanner) Scan(fsys fs.FS, facts *model.Facts) error {
 	facts.Set("dockerfile.base_image", finalImage, loc)
 	facts.Set("dockerfile.final_image", finalImage, loc)
 	facts.Set("dockerfile.stage_count", stageCount, model.Location{File: path})
+
+	// builder_image is the explicit "builder" stage if present, else the first FROM.
+	if builderImage == "" {
+		builderImage, builderLine = firstImage, firstLine
+	}
+	facts.Set("dockerfile.builder_image", builderImage, model.Location{File: path, Line: builderLine})
 	return nil
 }

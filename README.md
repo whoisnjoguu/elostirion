@@ -41,6 +41,7 @@ The common arguments are:
 - The `--spec` flag to specify the spec file
 - The `--format` flag to pick the output: text, json, junit, or sarif
 - The `--fail-on` flag to set the minimum severity that fails the run
+- The `--color` flag to force or disable ANSI output: always, auto, or never
 
 For example, verify the current repository in CI:
 
@@ -97,7 +98,6 @@ See the CLI help (`-h` or `--help`) or below for full details.
 
     spec     Author and check specs: init, validate, fmt.
 
-
 ### Full
 
     Usage: elo <command> [options]
@@ -123,6 +123,10 @@ See the CLI help (`-h` or `--help`) or below for full details.
 
       --fail-on=severity      Minimum severity that causes a non-zero exit:
                              error, drift, or warn. Default: error.
+
+      --color=when            Colorize output: always, auto, or never. always
+                             forces ANSI even in a pipe; never disables it even
+                             on a TTY. Default: auto.
 
       -l, --language=langs    Languages to scan (for example go, py);
                              repeatable or comma-separated. Default: all.

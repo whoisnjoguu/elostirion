@@ -1,0 +1,12 @@
+[1;92m✔[m [1;4;4ma[m[1;4;4mc[m[1;4;4mm[m[1;4;4me[m[1;4;4m/[m[1;4;4ma[m[1;4;4mp[m[1;4;4mi[m
+[1;91m✘[m [1;4;4ma[m[1;4;4mc[m[1;4;4mm[m[1;4;4me[m[1;4;4m/[m[1;4;4mw[m[1;4;4me[m[1;4;4mb[m
+    [41m [m[1;97;41mERROR[m[41m [m [90m[go-version-min][m Go version in go.mod must be at least 1.25.12.  [3;90mgo.mod:5[m
+        got [91m"1.22"[m, want [92m"1.25.12"[m
+    [43m [m[1;30;43mWARN[m[43m [m [90m[base-image-approved][m Dockerfile base image must be an approved golang tag.  [3;90mDockerfile[m
+        got [91m"golang:1.22"[m, want [92m"golang:1.25"[m
+    [45m [m[1;97;45mDRIFT[m[45m [m [90m[tf-module-pinned][m Terraform module drifted from state.
+        got [91m"1.0.0"[m, want [92m"1.2.0"[m
+    [44m [m[1;97;44mINFO[m[44m [m [90m[project-name-set][m pyproject.toml should declare a project name.  [3;90mpyproject.toml:2[m
+
+[1mdigressing:[m acme/web
+[1m2 scanned, 1 conformant, 1 digressing (1 error, 1 drift, 1 warn, 1 info)[m

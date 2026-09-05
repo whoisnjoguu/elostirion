@@ -101,10 +101,26 @@ func renderAndExit(rep *report.Report) error {
 	return nil
 }
 
-// useColor reports whether stdout should be colorized, honoring TTY detection,
-// TERM, NO_COLOR, and CLICOLOR_FORCE via the color profile.
+// useColor reports whether stdout should be colorized
 func useColor() bool {
-	return colorprofile.Detect(os.Stdout, os.Environ()) >= colorprofile.ANSI
+	switch colorFlag {
+	case "always":
+		return true
+	case "never":
+		return false
+	default:
+		return colorprofile.Detect(os.Stdout, os.Environ()) >= colorprofile.ANSI
+	}
+}
+
+// validateColor rejects an unrecognized --color value.
+func validateColor() error {
+	switch colorFlag {
+	case "", "always", "auto", "never":
+		return nil
+	default:
+		return failure("unknown --color %q; want always, auto, or never", colorFlag)
+	}
 }
 
 // evaluate scans a directory and evaluates the spec, returning findings.

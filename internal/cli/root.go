@@ -20,6 +20,7 @@ var (
 	specFlag    string
 	formatFlag  string
 	failOn      string
+	colorFlag   string
 	languages   []string
 	dryRun      bool
 	verbose     bool
@@ -37,13 +38,12 @@ func startProfile() error {
 	}
 
 	if err := pprof.StartCPUProfile(f); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 
 	cpuProfileF = f
 	return nil
-
 }
 
 // stop profile
@@ -53,7 +53,7 @@ func stopProfile() {
 	}
 
 	pprof.StopCPUProfile()
-	cpuProfileF.Close()
+	_ = cpuProfileF.Close()
 	cpuProfileF = nil
 }
 
@@ -73,6 +73,9 @@ drift from that state. It does not require a server or a cluster.`,
 // rootPreRun is the single PersistentPreRunE hook: profiling first, then validation.
 func rootPreRun(cmd *cobra.Command, args []string) error {
 	if err := startProfile(); err != nil {
+		return err
+	}
+	if err := validateColor(); err != nil {
 		return err
 	}
 	return validateLanguages(cmd, args)
@@ -100,10 +103,11 @@ func Execute() {
 func init() {
 	// profiling
 	rootCmd.PersistentFlags().StringVar(&cpuProfile, "cpuprofile", "", "write CPU profile to file")
-	rootCmd.PersistentFlags().MarkHidden("cpuprofile")
+	_ = rootCmd.PersistentFlags().MarkHidden("cpuprofile")
 	rootCmd.PersistentFlags().StringVarP(&specFlag, "spec", "s", "", "fleet spec: local path, git:: URL, or http(s) URL")
 	rootCmd.PersistentFlags().StringVarP(&formatFlag, "format", "f", "text", "output format: text, json, junit, sarif")
 	rootCmd.PersistentFlags().StringVar(&failOn, "fail-on", "error", "minimum severity that fails: error, drift, warn")
+	rootCmd.PersistentFlags().StringVar(&colorFlag, "color", "auto", "colorize output: always, auto, never")
 	rootCmd.PersistentFlags().StringSliceVarP(&languages, "language", "l", nil, "languages to scan (for example go, py); repeatable or comma-separated. Default: all")
 	rootCmd.PersistentFlags().BoolVarP(&dryRun, "dry-run", "d", false, "report changes without making them")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
