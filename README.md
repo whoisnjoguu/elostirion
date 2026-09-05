@@ -64,8 +64,9 @@ Verify a remote GitHub repository through the API, without cloning (set
 
     $ elo verify some-org/some-repo --spec fleet-spec.yaml
 
-Scan a directory of repositories (each immediate subdirectory is a repo) and
-report which ones digress from the spec:
+Scan a directory of repositories and report which ones digress from the spec.
+Discovery recurses up to `--depth` levels (default 3), so nested projects — for
+example a `backend/pyproject.toml` inside a larger repo — are found too:
 
     $ elo scan --spec ./fleet-spec.yaml ~/src
 
