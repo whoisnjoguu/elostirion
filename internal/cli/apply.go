@@ -38,6 +38,7 @@ func init() {
 	applyCmd.Flags().StringVar(&applyToken, "token", "", "API token (default: GITHUB_TOKEN)")
 	applyCmd.Flags().BoolVar(&applyDraft, "draft", false, "open pull requests as drafts")
 	rootCmd.AddCommand(applyCmd)
+	addDepthFlag(applyCmd)
 }
 
 func runApply(cmd *cobra.Command, args []string) error {

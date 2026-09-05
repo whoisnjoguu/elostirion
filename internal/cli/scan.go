@@ -25,6 +25,18 @@ var (
 	orgFlag    string
 )
 
+// defaultMaxDepth bounds how deep discovery recurses looking for nested repos
+const defaultMaxDepth = 3
+
+// maxDepth is the flag-tunable discovery depth shared by scan, plan, and apply
+var maxDepth = defaultMaxDepth
+
+// addDepthFlag registers the shared --depth flag on a repo-discovering command
+func addDepthFlag(cmd *cobra.Command) {
+	cmd.Flags().IntVar(&maxDepth, "depth", defaultMaxDepth,
+		"max directory depth to search for nested repositories")
+}
+
 // scanCmd reads many repositories and reports where they diverge from the spec without making changes
 var scanCmd = &cobra.Command{
 	Use:   "scan [dir...]",
@@ -49,6 +61,7 @@ func init() {
 	scanCmd.Flags().StringVar(&orgFlag, "org", "",
 		"scan every repository in an organisation, e.g. github.com/acme")
 	scanCmd.MarkFlagsMutuallyExclusive("remote", "org")
+	addDepthFlag(scanCmd)
 }
 
 func runScan(cmd *cobra.Command, args []string) error {
@@ -207,25 +220,41 @@ func collectRepos(roots []string) ([]string, error) {
 			dirs = append(dirs, dir)
 		}
 	}
+	markers := scan.MarkersFor(languages...)
 	for _, root := range roots {
-		found, err := discoverRepos(root)
-		if err != nil {
+		if err := discoverRepos(root, markers, 0, add); err != nil {
 			return nil, err
-		}
-		if len(found) == 0 && isRepo(root) {
-			add(root)
-			continue
-		}
-		for _, d := range found {
-			add(d)
 		}
 	}
 	return dirs, nil
 }
 
-// isRepo reports whether dir itself carries a discovery marker for the selected languages.
-func isRepo(dir string) bool {
-	for _, m := range scan.MarkersFor(languages...) {
+// discoverRepos walks dir up to maxDepth levels below the root
+func discoverRepos(dir string, markers []string, depth int, add func(string)) error {
+	if dirHasMarker(dir, markers) {
+		add(dir)
+	}
+	if depth >= maxDepth {
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !e.IsDir() || prune(e.Name()) {
+			continue
+		}
+		if err := discoverRepos(filepath.Join(dir, e.Name()), markers, depth+1, add); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dirHasMarker reports whether dir directly contains a discovery marker.
+func dirHasMarker(dir string, markers []string) bool {
+	for _, m := range markers {
 		if fileExists(filepath.Join(dir, m)) {
 			return true
 		}
@@ -233,28 +262,13 @@ func isRepo(dir string) bool {
 	return false
 }
 
-// discoverRepos returns immediate subdirectories of root that contain a
-// discovery marker for the selected languages, treating each as a repository to scan
-func discoverRepos(root string) ([]string, error) {
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil, err
+// prune reports whether a directory name should never be descended into
+func prune(name string) bool {
+	switch name {
+	case "node_modules", "vendor":
+		return true
 	}
-	markers := scan.MarkersFor(languages...)
-	var dirs []string
-	for _, e := range entries {
-		if !e.IsDir() || e.Name() == "." || e.Name() == ".git" {
-			continue
-		}
-		dir := filepath.Join(root, e.Name())
-		for _, m := range markers {
-			if fileExists(filepath.Join(dir, m)) {
-				dirs = append(dirs, dir)
-				break
-			}
-		}
-	}
-	return dirs, nil
+	return strings.HasPrefix(name, ".")
 }
 
 func fileExists(path string) bool {
