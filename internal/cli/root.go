@@ -38,7 +38,7 @@ func startProfile() error {
 	}
 
 	if err := pprof.StartCPUProfile(f); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 
@@ -53,7 +53,7 @@ func stopProfile() {
 	}
 
 	pprof.StopCPUProfile()
-	cpuProfileF.Close()
+	_ = cpuProfileF.Close()
 	cpuProfileF = nil
 }
 
@@ -103,7 +103,7 @@ func Execute() {
 func init() {
 	// profiling
 	rootCmd.PersistentFlags().StringVar(&cpuProfile, "cpuprofile", "", "write CPU profile to file")
-	rootCmd.PersistentFlags().MarkHidden("cpuprofile")
+	_ = rootCmd.PersistentFlags().MarkHidden("cpuprofile")
 	rootCmd.PersistentFlags().StringVarP(&specFlag, "spec", "s", "", "fleet spec: local path, git:: URL, or http(s) URL")
 	rootCmd.PersistentFlags().StringVarP(&formatFlag, "format", "f", "text", "output format: text, json, junit, sarif")
 	rootCmd.PersistentFlags().StringVar(&failOn, "fail-on", "error", "minimum severity that fails: error, drift, warn")
