@@ -1,0 +1,12 @@
+ok   acme/api
+FAIL acme/web
+    ERROR [go-version-min] Go version in go.mod must be at least 1.25.12.  go.mod:5
+        got "1.22", want "1.25.12"
+    WARN  [base-image-approved] Dockerfile base image must be an approved golang tag.  Dockerfile
+        got "golang:1.22", want "golang:1.25"
+    DRIFT [tf-module-pinned] Terraform module drifted from state.
+        got "1.0.0", want "1.2.0"
+    INFO  [project-name-set] pyproject.toml should declare a project name.  pyproject.toml:2
+
+digressing: acme/web
+2 scanned, 1 conformant, 1 digressing (1 error, 1 drift, 1 warn, 1 info)

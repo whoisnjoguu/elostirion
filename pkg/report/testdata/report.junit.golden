@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="enterprise-apis-fleet" tests="4" failures="4">
+  <testsuite name="acme/api" tests="0" failures="0"></testsuite>
+  <testsuite name="acme/web" tests="4" failures="4">
+    <testcase name="go-version-min" classname="acme/web">
+      <failure message="Go version in go.mod must be at least 1.25.12." type="error">go-version-min: got &#34;1.22&#34;, want &#34;1.25.12&#34; (go.mod:5)</failure>
+    </testcase>
+    <testcase name="base-image-approved" classname="acme/web">
+      <failure message="Dockerfile base image must be an approved golang tag." type="warn">base-image-approved: got &#34;golang:1.22&#34;, want &#34;golang:1.25&#34; (Dockerfile)</failure>
+    </testcase>
+    <testcase name="tf-module-pinned" classname="acme/web">
+      <failure message="Terraform module drifted from state." type="drift">tf-module-pinned: got &#34;1.0.0&#34;, want &#34;1.2.0&#34;</failure>
+    </testcase>
+    <testcase name="project-name-set" classname="acme/web">
+      <failure message="pyproject.toml should declare a project name." type="info">project-name-set (pyproject.toml:2)</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

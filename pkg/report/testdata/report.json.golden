@@ -1,0 +1,47 @@
+{
+  "spec": "enterprise-apis-fleet",
+  "total": 4,
+  "repos": [
+    {
+      "repo": "acme/api",
+      "findings": []
+    },
+    {
+      "repo": "acme/web",
+      "findings": [
+        {
+          "rule_id": "go-version-min",
+          "severity": "error",
+          "message": "Go version in go.mod must be at least 1.25.12.",
+          "file": "go.mod",
+          "line": 5,
+          "got": "1.22",
+          "want": "1.25.12"
+        },
+        {
+          "rule_id": "base-image-approved",
+          "severity": "warn",
+          "message": "Dockerfile base image must be an approved golang tag.",
+          "file": "Dockerfile",
+          "got": "golang:1.22",
+          "want": "golang:1.25"
+        },
+        {
+          "rule_id": "tf-module-pinned",
+          "severity": "drift",
+          "message": "Terraform module drifted from state.",
+          "got": "1.0.0",
+          "want": "1.2.0"
+        },
+        {
+          "rule_id": "project-name-set",
+          "severity": "info",
+          "message": "pyproject.toml should declare a project name.",
+          "file": "pyproject.toml",
+          "line": 2
+        }
+      ]
+    }
+  ],
+  "max_severity": "error"
+}

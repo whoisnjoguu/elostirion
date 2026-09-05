@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "elostirion",
+          "rules": [
+            {
+              "id": "go-version-min"
+            },
+            {
+              "id": "base-image-approved"
+            },
+            {
+              "id": "tf-module-pinned"
+            },
+            {
+              "id": "project-name-set"
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "go-version-min",
+          "level": "error",
+          "message": {
+            "text": "Go version in go.mod must be at least 1.25.12. (got \"1.22\", want \"1.25.12\")"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "go.mod"
+                },
+                "region": {
+                  "startLine": 5
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "base-image-approved",
+          "level": "warning",
+          "message": {
+            "text": "Dockerfile base image must be an approved golang tag. (got \"golang:1.22\", want \"golang:1.25\")"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Dockerfile"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "tf-module-pinned",
+          "level": "warning",
+          "message": {
+            "text": "Terraform module drifted from state. (got \"1.0.0\", want \"1.2.0\")"
+          }
+        },
+        {
+          "ruleId": "project-name-set",
+          "level": "note",
+          "message": {
+            "text": "pyproject.toml should declare a project name."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "pyproject.toml"
+                },
+                "region": {
+                  "startLine": 2
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
