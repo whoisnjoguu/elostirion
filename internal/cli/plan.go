@@ -21,6 +21,7 @@ the unified diff of the edits apply would commit. It makes no changes.`,
 
 func init() {
 	rootCmd.AddCommand(planCmd)
+	addDepthFlag(planCmd)
 }
 
 func runPlan(cmd *cobra.Command, args []string) error {
