@@ -21,9 +21,9 @@ func TestProgressPlainOutput(t *testing.T) {
 		{Owner: "acme", Name: "worker"},
 		{Owner: "acme", Name: "design-assets"},
 	})
-	p.scanning(1, "acme/api")
-	p.scanning(2, "acme/worker")
-	p.skipping(3, "acme/design-assets", "no go markers")
+	p.scanning("acme/api")
+	p.scanning("acme/worker")
+	p.skipping("acme/design-assets", "no go markers")
 	p.done()
 
 	out := b.String()
@@ -60,7 +60,7 @@ func TestProgressColorOutput(t *testing.T) {
 	var b strings.Builder
 	p := newProgress(&b, true, false)
 	p.begin([]model.Repo{{Owner: "acme", Name: "api"}})
-	p.scanning(1, "acme/api")
+	p.scanning("acme/api")
 	if !ansiRe.MatchString(b.String()) {
 		t.Error("color progress has no ANSI sequences")
 	}
@@ -73,8 +73,8 @@ func TestProgressTTYAnimates(t *testing.T) {
 	p.discovering("acme")
 	p.discovered(2)
 	p.begin([]model.Repo{{Owner: "acme", Name: "api"}, {Owner: "acme", Name: "assets"}})
-	p.scanning(1, "acme/api")
-	p.skipping(2, "acme/assets", "no go markers")
+	p.scanning("acme/api")
+	p.skipping("acme/assets", "no go markers")
 	p.done()
 
 	out := b.String()
@@ -96,8 +96,8 @@ func TestProgressTTYPersistsSkipsAndSummary(t *testing.T) {
 	var b strings.Builder
 	p := newProgress(&b, false, true)
 	p.begin([]model.Repo{{Owner: "acme", Name: "api"}, {Owner: "acme", Name: "assets"}})
-	p.scanning(1, "acme/api")
-	p.skipping(2, "acme/assets", "no go markers")
+	p.scanning("acme/api")
+	p.skipping("acme/assets", "no go markers")
 	p.done()
 
 	out := b.String()
@@ -118,8 +118,8 @@ func TestProgressNilIsQuiet(t *testing.T) {
 	p.discovering("acme")
 	p.discovered(1)
 	p.begin(nil)
-	p.scanning(1, "x")
-	p.skipping(2, "y", "z")
+	p.scanning("x")
+	p.skipping("y", "z")
 	p.endLine()
 	p.done()
 }

@@ -5,15 +5,11 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/whoisnjoguu/elostirion/pkg/diff"
-	"github.com/whoisnjoguu/elostirion/pkg/forge"
 	"github.com/whoisnjoguu/elostirion/pkg/model"
-	pkgreader "github.com/whoisnjoguu/elostirion/pkg/reader"
-	"github.com/whoisnjoguu/elostirion/pkg/reconcile"
 	"github.com/whoisnjoguu/elostirion/pkg/scan"
 	"github.com/whoisnjoguu/elostirion/pkg/spec"
 )
@@ -39,6 +35,7 @@ func init() {
 	planCmd.Flags().StringVar(&orgFlag, "org", "",
 		"preview every repository in an organisation, e.g. github.com/acme")
 	planCmd.MarkFlagsMutuallyExclusive("remote", "org")
+	addConcurrencyFlag(planCmd)
 }
 
 func runPlan(cmd *cobra.Command, args []string) error {
@@ -81,7 +78,8 @@ func runPlan(cmd *cobra.Command, args []string) error {
 }
 
 // runPlanRemote previews plans for repositories read directly from a provider
-// API, streaming progress as scan does
+// API, scanning up to --concurrency repos in parallel. Diffs are buffered and
+// printed after the progress stream so stdout stays ordered.
 func runPlanRemote(s *spec.Spec) error {
 	ctx := context.Background()
 	var p *progress
@@ -97,37 +95,16 @@ func runPlanRemote(s *spec.Spec) error {
 	}
 	p.begin(repos)
 
-	var out []planned
-	for i, repo := range repos {
-		reader, err := pkgreader.For(repo, forge.Config{Token: resolveToken(repo.Provider)})
-		if err != nil {
-			return failure("%v", err)
-		}
-		entries, err := reader.ListFiles(ctx, "")
-		if err != nil {
-			return failure("%s: %v", repo.Slug(), err)
-		}
-		if len(languages) > 0 && !hasMarker(entries, languages) {
-			p.skipping(i+1, repo.Slug(), "no "+strings.Join(languages, "/")+" markers")
-			continue
-		}
-		p.scanning(i+1, repo.Slug())
-		fsys := pkgreader.FS(ctx, reader)
-		facts, err := scan.Run(fsys, repo, languages...)
-		if err != nil {
-			return failure("scan %s: %v", repo.Slug(), err)
-		}
-		findings := reconcile.EvaluateFS(s, facts, fsys)
-		plan := buildPlanFS(s, fsys, facts.Repo, findings)
-		if !plan.Empty() || len(plan.Reasons) > 0 {
-			out = append(out, planned{plan: plan, fsys: fsys})
-		}
-	}
+	results := scanRemoteRepos(ctx, repos, concurrencyFlag, remoteWorker(s), p)
 	p.done()
 
 	changed := false
-	for _, pl := range out {
-		if renderPlan(pl.plan, pl.fsys) {
+	for _, res := range results {
+		if res.skip != "" {
+			continue
+		}
+		plan := buildPlanFS(s, res.fsys, res.repo, res.findings)
+		if renderPlan(plan, res.fsys) {
 			changed = true
 		}
 	}
@@ -135,12 +112,6 @@ func runPlanRemote(s *spec.Spec) error {
 		fmt.Fprintln(os.Stdout, "no changes planned")
 	}
 	return nil
-}
-
-// planned pairs a plan with the filesystem its diff is computed against.
-type planned struct {
-	plan model.ChangePlan
-	fsys fs.FS
 }
 
 // renderPlan prints a plan's header, reasons, and unified diff
