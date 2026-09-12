@@ -103,14 +103,30 @@ func renderAndExit(rep *report.Report) error {
 
 // useColor reports whether stdout should be colorized
 func useColor() bool {
+	return colorFor(os.Stdout)
+}
+
+// useColorErr reports whether stderr (the progress stream) should be colorized.
+func useColorErr() bool {
+	return colorFor(os.Stderr)
+}
+
+// colorFor applies the --color override, else auto-detects for the stream.
+func colorFor(f *os.File) bool {
 	switch colorFlag {
 	case "always":
 		return true
 	case "never":
 		return false
 	default:
-		return colorprofile.Detect(os.Stdout, os.Environ()) >= colorprofile.ANSI
+		return colorprofile.Detect(f, os.Environ()) >= colorprofile.ANSI
 	}
+}
+
+// stderrIsTTY reports whether stderr is a character device
+func stderrIsTTY() bool {
+	fi, err := os.Stderr.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
 // validateColor rejects an unrecognized --color value.
@@ -129,5 +145,5 @@ func evaluate(s *spec.Spec, dir, slug string) ([]model.Finding, model.Repo, erro
 	if err != nil {
 		return nil, model.Repo{}, err
 	}
-	return reconcile.Evaluate(s, facts), facts.Repo, nil
+	return reconcile.EvaluateFS(s, facts, scan.DirFS(dir)), facts.Repo, nil
 }

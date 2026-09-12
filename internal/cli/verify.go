@@ -108,7 +108,7 @@ func verifyRemote(s *spec.Spec, owner, name string) error {
 	if err != nil {
 		return failure("scan %s/%s: %v", owner, name, err)
 	}
-	findings := reconcile.Evaluate(s, facts)
+	findings := reconcile.EvaluateFS(s, facts, fsys)
 	rep := report.New(s, facts.Repo, findings)
 	return renderAndExit(rep)
 }

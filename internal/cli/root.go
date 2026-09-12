@@ -10,6 +10,7 @@ import (
 	// Blank imports register the built-in scanners via their init functions.
 	_ "github.com/whoisnjoguu/elostirion/pkg/scan/dockerfile"
 	_ "github.com/whoisnjoguu/elostirion/pkg/scan/gomod"
+	_ "github.com/whoisnjoguu/elostirion/pkg/scan/pipeline"
 	_ "github.com/whoisnjoguu/elostirion/pkg/scan/python"
 )
 
@@ -24,6 +25,7 @@ var (
 	languages   []string
 	dryRun      bool
 	verbose     bool
+	quiet       bool
 )
 
 // start profile
@@ -111,4 +113,5 @@ func init() {
 	rootCmd.PersistentFlags().StringSliceVarP(&languages, "language", "l", nil, "languages to scan (for example go, py); repeatable or comma-separated. Default: all")
 	rootCmd.PersistentFlags().BoolVarP(&dryRun, "dry-run", "d", false, "report changes without making them")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
+	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "suppress progress output")
 }
