@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -119,8 +120,8 @@ func resolveToken(provider string) string {
 	return ""
 }
 
-// buildPlan evaluates one repo and runs the recipes of violated rules to
-// produce a ChangePlan with real file edits
+// buildPlan evaluates a local checkout and runs the recipes of violated rules
+// to produce a ChangePlan with real file edits.
 func buildPlan(s *spec.Spec, dir string) (model.ChangePlan, error) {
 	slug := filepath.Base(mustAbs(dir))
 	findings, repo, err := evaluate(s, dir, slug)
@@ -131,13 +132,16 @@ func buildPlan(s *spec.Spec, dir string) (model.ChangePlan, error) {
 		repo.Provider, repo.Owner, repo.Name = provider, owner, name
 		repo.Path = dir
 	}
+	return buildPlanFS(s, scan.DirFS(dir), repo, findings), nil
+}
 
+// buildPlanFS runs the recipes of violated rules over fsys
+func buildPlanFS(s *spec.Spec, fsys fs.FS, repo model.Repo, findings []model.Finding) model.ChangePlan {
 	rulesByID := make(map[string]spec.Rule, len(s.Rules))
 	for _, r := range s.Rules {
 		rulesByID[r.ID] = r
 	}
 
-	fsys := scan.DirFS(dir)
 	plan := model.ChangePlan{Repo: repo}
 	edited := map[string][]byte{} // path -> latest content, so later recipes see earlier edits
 	recipesRun := map[string]bool{}
@@ -178,7 +182,7 @@ func buildPlan(s *spec.Spec, dir string) (model.ChangePlan, error) {
 	}
 	plan.Title = fmt.Sprintf("chore: converge %s to fleet spec", repo.Name)
 	plan.Body = planBody(plan)
-	return plan, nil
+	return plan
 }
 
 // planBody renders the PR body from the plan's reasons.
