@@ -47,10 +47,11 @@ func (r Repo) Slug() string {
 
 // Facts are the attributes a set of scanners extracted from one repository
 type Facts struct {
-	Repo      Repo
-	Languages []string // detected in the repository by marker files
-	Values    map[string]any
-	Sources   map[string]Location
+	Repo        Repo
+	Languages   []string // detected in the repository by marker files
+	Values      map[string]any
+	Sources     map[string]Location
+	ElemSources map[string][]Location
 }
 
 // HasLanguage reports whether lang was detected in the repository.
@@ -66,9 +67,10 @@ func (f *Facts) HasLanguage(lang string) bool {
 // NewFacts returns an initialised Facts for a repository.
 func NewFacts(repo Repo) *Facts {
 	return &Facts{
-		Repo:    repo,
-		Values:  make(map[string]any),
-		Sources: make(map[string]Location),
+		Repo:        repo,
+		Values:      make(map[string]any),
+		Sources:     make(map[string]Location),
+		ElemSources: make(map[string][]Location),
 	}
 }
 
@@ -78,6 +80,23 @@ func (f *Facts) Set(key string, value any, source Location) {
 	if source.File != "" {
 		f.Sources[key] = source
 	}
+}
+
+// SetList records a list fact with one location per element
+func (f *Facts) SetList(key string, values []string, elems []Location) {
+	f.Values[key] = values
+	f.ElemSources[key] = elems
+	if len(elems) > 0 {
+		f.Sources[key] = elems[0]
+	}
+}
+
+// ElemSource returns the location of element i of a list fact
+func (f *Facts) ElemSource(key string, i int) Location {
+	if locs := f.ElemSources[key]; i >= 0 && i < len(locs) {
+		return locs[i]
+	}
+	return f.Sources[key]
 }
 
 // Get returns a fact value and whether it was present.
