@@ -2,13 +2,13 @@ package reader
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/go-github/v90/github"
@@ -29,18 +29,55 @@ func testGitHubClient(t *testing.T, server *httptest.Server) *github.Client {
 	return c
 }
 
-func TestGitHubReaderGetFile(t *testing.T) {
-	want := "module example.com/svc\n\ngo 1.25\n"
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/repos/acme/api/contents/go.mod" {
+// treeServer mocks the Git Trees flow
+func treeServer(t *testing.T, files map[string]string, blobHits *int) *httptest.Server {
+	t.Helper()
+	// deterministic blob SHA per path
+	shaOf := func(path string) string { return "sha-" + path }
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/repos/acme/api":
+			io.WriteString(w, `{"default_branch":"main"}`)
+		case r.URL.Path == "/repos/acme/api/commits/main":
+			io.WriteString(w, `{"sha":"c1","commit":{"tree":{"sha":"t1"}}}`)
+		case r.URL.Path == "/repos/acme/api/git/trees/t1":
+			var b strings.Builder
+			b.WriteString(`{"sha":"t1","truncated":false,"tree":[`)
+			first := true
+			for path := range files {
+				if !first {
+					b.WriteString(",")
+				}
+				first = false
+				fmt.Fprintf(&b, `{"path":%q,"type":"blob","sha":%q}`, path, shaOf(path))
+			}
+			b.WriteString("]}")
+			io.WriteString(w, b.String())
+		case strings.HasPrefix(r.URL.Path, "/repos/acme/api/git/blobs/"):
+			if blobHits != nil {
+				*blobHits++
+			}
+			sha := strings.TrimPrefix(r.URL.Path, "/repos/acme/api/git/blobs/")
+			for path, content := range files {
+				if shaOf(path) == sha {
+					io.WriteString(w, content)
+					return
+				}
+			}
+			w.WriteHeader(http.StatusNotFound)
+		default:
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
-		enc := base64.StdEncoding.EncodeToString([]byte(want))
-		fmt.Fprintf(w, `{"type":"file","name":"go.mod","path":"go.mod","encoding":"base64","content":%q}`, enc)
 	}))
+}
+
+func TestGitHubReaderGetFile(t *testing.T) {
+	want := "module example.com/svc\n\ngo 1.25\n"
+	var blobHits int
+	server := treeServer(t, map[string]string{"go.mod": want}, &blobHits)
 	defer server.Close()
 
-	reader := &githubReader{client: testGitHubClient(t, server), owner: "acme", name: "api"}
+	reader := &githubReader{client: testGitHubClient(t, server), owner: "acme", name: "api", ref: "main"}
 	got, err := reader.GetFile(context.Background(), "go.mod")
 	if err != nil {
 		t.Fatalf("GetFile: %v", err)
@@ -48,24 +85,41 @@ func TestGitHubReaderGetFile(t *testing.T) {
 	if string(got) != want {
 		t.Errorf("GetFile = %q, want %q", got, want)
 	}
+	if blobHits != 1 {
+		t.Errorf("blob fetches = %d, want 1", blobHits)
+	}
+}
+
+// TestGitHubReaderMissIsFree proves a missing file is answered from the cached tree with no blob fetch
+func TestGitHubReaderMissIsFree(t *testing.T) {
+	var blobHits int
+	server := treeServer(t, map[string]string{"go.mod": "module x\n"}, &blobHits)
+	defer server.Close()
+
+	reader := &githubReader{client: testGitHubClient(t, server), owner: "acme", name: "api", ref: "main"}
+	for _, miss := range []string{"pyproject.toml", "Dockerfile", "docker/Dockerfile", ".gitlab-ci.yml"} {
+		if _, err := reader.GetFile(context.Background(), miss); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("GetFile(%q) err = %v, want fs.ErrNotExist", miss, err)
+		}
+	}
+	if blobHits != 0 {
+		t.Errorf("blob fetches for missing files = %d, want 0", blobHits)
+	}
 }
 
 func TestGitHubReaderListFiles(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, `[
-			{"type":"file","name":"go.mod","path":"go.mod"},
-			{"type":"file","name":"Dockerfile","path":"Dockerfile"},
-			{"type":"dir","name":"cmd","path":"cmd"}
-		]`)
-	}))
+	server := treeServer(t, map[string]string{
+		"go.mod":       "module x\n",
+		"cmd/elo/main": "package main\n",
+	}, nil)
 	defer server.Close()
 
-	reader := &githubReader{client: testGitHubClient(t, server), owner: "acme", name: "api"}
+	reader := &githubReader{client: testGitHubClient(t, server), owner: "acme", name: "api", ref: "main"}
 	entries, err := reader.ListFiles(context.Background(), "")
 	if err != nil {
 		t.Fatalf("ListFiles: %v", err)
 	}
-	want := map[string]bool{"go.mod": false, "Dockerfile": false, "cmd": true}
+	want := map[string]bool{"go.mod": false, "cmd": true}
 	if len(entries) != len(want) {
 		t.Fatalf("ListFiles = %v", entries)
 	}

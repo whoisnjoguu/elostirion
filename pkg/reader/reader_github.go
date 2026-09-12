@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
+	"sync"
 
 	"github.com/google/go-github/v90/github"
 
@@ -13,15 +15,20 @@ import (
 	"github.com/whoisnjoguu/elostirion/pkg/model"
 )
 
-// githubReader reads repository files through the GitHub Contents API.
+// githubReader reads repository files through the GitHub API
 type githubReader struct {
 	client *github.Client
 	owner  string
 	name   string
 	ref    string // empty means the repository default branch
+
+	once     sync.Once
+	blobs    map[string]string // path -> blob SHA
+	byDir    map[string][]DirEntry
+	fallback bool // tree truncated or unavailable: use the Contents API
 }
 
-// newGitHubReader builds a Contents-API reader for a single repository.
+// newGitHubReader builds a reader for a single repository.
 func newGitHubReader(repo model.Repo, cfg forge.Config) (*githubReader, error) {
 	client, err := githubClient(cfg)
 	if err != nil {
@@ -53,8 +60,85 @@ func (r *githubReader) contentOpts() *github.RepositoryContentGetOptions {
 	return &github.RepositoryContentGetOptions{Ref: r.ref}
 }
 
-// GetFile fetches and decodes a single file's contents.
+// ensureTree fetches the recursive repository tree once and builds the path index
+func (r *githubReader) ensureTree(ctx context.Context) {
+	r.once.Do(func() {
+		ref := r.ref
+		if ref == "" {
+			repo, _, err := r.client.Repositories.Get(ctx, r.owner, r.name)
+			if err != nil {
+				r.fallback = true
+				return
+			}
+			ref = repo.GetDefaultBranch()
+		}
+		commit, _, err := r.client.Repositories.GetCommit(ctx, r.owner, r.name, ref, nil)
+		if err != nil {
+			r.fallback = true
+			return
+		}
+		tree, _, err := r.client.Git.GetTree(ctx, r.owner, r.name, commit.GetCommit().GetTree().GetSHA(), true)
+		if err != nil {
+			r.fallback = true
+			return
+		}
+		if tree.GetTruncated() {
+			r.fallback = true // too large for one tree call; fall back per path
+			return
+		}
+		r.blobs = make(map[string]string)
+		r.byDir = make(map[string][]DirEntry)
+		seen := map[string]bool{} // dedupe directory entries across sibling paths
+		for _, e := range tree.Entries {
+			if e.GetType() != "blob" {
+				continue // directories are derived from blob paths below
+			}
+			path := e.GetPath()
+			r.blobs[path] = e.GetSHA()
+			// Register the blob and every ancestor directory under its parent.
+			segs := strings.Split(path, "/")
+			for i := range segs {
+				parent := strings.Join(segs[:i], "/")
+				name := segs[i]
+				if key := parent + "\x00" + name; seen[key] {
+					continue
+				} else {
+					seen[key] = true
+				}
+				r.byDir[parent] = append(r.byDir[parent], DirEntry{Name: name, IsDir: i < len(segs)-1})
+			}
+		}
+	})
+}
+
+// GetFile fetches a file's contents
 func (r *githubReader) GetFile(ctx context.Context, path string) ([]byte, error) {
+	r.ensureTree(ctx)
+	if r.fallback {
+		return r.getFileContents(ctx, path)
+	}
+	sha, ok := r.blobs[path]
+	if !ok {
+		return nil, &fs.PathError{Op: "open", Path: path, Err: fs.ErrNotExist}
+	}
+	data, _, err := r.client.Git.GetBlobRaw(ctx, r.owner, r.name, sha)
+	if err != nil {
+		return nil, classifyGitHubErr(err, path)
+	}
+	return data, nil
+}
+
+// ListFiles lists the immediate entries under dir
+func (r *githubReader) ListFiles(ctx context.Context, dir string) ([]DirEntry, error) {
+	r.ensureTree(ctx)
+	if r.fallback {
+		return r.listFilesContents(ctx, dir)
+	}
+	return append([]DirEntry(nil), r.byDir[dir]...), nil
+}
+
+// getFileContents fetches and decodes a single file via the Contents API.
+func (r *githubReader) getFileContents(ctx context.Context, path string) ([]byte, error) {
 	file, _, _, err := r.client.Repositories.GetContents(ctx, r.owner, r.name, path, r.contentOpts())
 	if err != nil {
 		return nil, classifyGitHubErr(err, path)
@@ -69,8 +153,8 @@ func (r *githubReader) GetFile(ctx context.Context, path string) ([]byte, error)
 	return []byte(content), nil
 }
 
-// ListFiles lists the immediate entries under dir ("" for the repository root).
-func (r *githubReader) ListFiles(ctx context.Context, dir string) ([]DirEntry, error) {
+// listFilesContents lists dir via the Contents API.
+func (r *githubReader) listFilesContents(ctx context.Context, dir string) ([]DirEntry, error) {
 	_, contents, _, err := r.client.Repositories.GetContents(ctx, r.owner, r.name, dir, r.contentOpts())
 	if err != nil {
 		return nil, classifyGitHubErr(err, dir)
