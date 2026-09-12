@@ -1,3 +1,5 @@
+// Package pipeline scans CI pipeline files for
+// step/job names and container images, with file:line positions.
 package pipeline
 
 import (

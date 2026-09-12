@@ -107,7 +107,7 @@ func (p *progress) haltAnim() {
 	close(p.stopAnim)
 	<-p.animDone
 	p.mu.Lock()
-	fmt.Fprint(p.w, eraseLine)
+	_, _ = fmt.Fprint(p.w, eraseLine)
 	p.mu.Unlock()
 }
 
@@ -116,11 +116,11 @@ func (p *progress) redrawLocked() {
 	spin := p.spinner.Render(spinnerFrames[p.frame%len(spinnerFrames)])
 	switch p.phase {
 	case "discovering":
-		fmt.Fprintf(p.w, "%s%s discovering repositories in %s…", eraseLine, spin, p.org)
+		_, _ = fmt.Fprintf(p.w, "%s%s discovering repositories in %s…", eraseLine, spin, p.org)
 	case "scanning":
 		padded := fmt.Sprintf("%-*s", p.width, p.slugNow)
 		counter := p.counter.Render(fmt.Sprintf("%*d/%d", p.cw, p.i, p.total))
-		fmt.Fprintf(p.w, "%s%s %s %s %s %s", eraseLine, spin,
+		_, _ = fmt.Fprintf(p.w, "%s%s %s %s %s %s", eraseLine, spin,
 			p.scanVerb.Render("scanning"), p.slug.Render(padded), p.barLocked(), counter)
 	}
 }
@@ -147,7 +147,7 @@ func (p *progress) discovering(org string) {
 		p.ensureAnim()
 		return
 	}
-	fmt.Fprintf(p.w, "discovering repositories in %s...", org)
+	_, _ = fmt.Fprintf(p.w, "discovering repositories in %s...", org)
 }
 
 // discovered completes the discovery phase with the repo count.
@@ -157,10 +157,10 @@ func (p *progress) discovered(n int) {
 	}
 	if p.tty {
 		p.haltAnim()
-		fmt.Fprintf(p.w, "discovering repositories in %s... %s\n", p.org, p.summary.Render(fmt.Sprintf("%d found", n)))
+		_, _ = fmt.Fprintf(p.w, "discovering repositories in %s... %s\n", p.org, p.summary.Render(fmt.Sprintf("%d found", n)))
 		return
 	}
-	fmt.Fprintf(p.w, " %s\n", p.summary.Render(fmt.Sprintf("%d found", n)))
+	_, _ = fmt.Fprintf(p.w, " %s\n", p.summary.Render(fmt.Sprintf("%d found", n)))
 }
 
 // endLine terminates progress output before an error surfaces.
@@ -172,7 +172,7 @@ func (p *progress) endLine() {
 		p.haltAnim()
 		return
 	}
-	fmt.Fprintln(p.w)
+	_, _ = fmt.Fprintln(p.w)
 }
 
 // begin sizes the progress columns for the repo set and starts the bar.
@@ -218,7 +218,7 @@ func (p *progress) skipping(i int, slug, reason string) {
 	p.skipped++
 	p.i, p.slugNow = i, slug
 	if p.tty {
-		fmt.Fprint(p.w, eraseLine)
+		_, _ = fmt.Fprint(p.w, eraseLine)
 		p.lineLocked(p.skipVerb, "skipping", i, slug, reason)
 		p.redrawLocked()
 	} else {
@@ -235,7 +235,7 @@ func (p *progress) lineLocked(verb lipgloss.Style, verbText string, i int, slug,
 	if reason != "" {
 		row += " " + p.reason.Render("("+reason+")")
 	}
-	fmt.Fprintln(p.w, row)
+	_, _ = fmt.Fprintln(p.w, row)
 }
 
 // done stops any animation and prints the closing summary.
@@ -245,7 +245,7 @@ func (p *progress) done() {
 	}
 	p.haltAnim()
 	elapsed := time.Since(p.start).Round(time.Second)
-	fmt.Fprintf(p.w, "%s\n\n", p.summary.Render(
+	_, _ = fmt.Fprintf(p.w, "%s\n\n", p.summary.Render(
 		fmt.Sprintf("scanned %d repo(s), skipped %d, in %s", p.scanned, p.skipped, elapsed),
 	))
 }
