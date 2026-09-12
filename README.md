@@ -24,6 +24,7 @@ which services run an old language version, or which Dockerfiles diverge from th
 golden template.
 
 ### [**UPDATED REGULARLY**] How did I get here?
+
 This project was born from real ops pain. Read through to have a sneak peek of the journey building this project.
 
 1. [elostirion? what is it?]("https://dev.whoisnjoguu.com/posts/elostirion/")
@@ -141,6 +142,11 @@ See the CLI help (`-h` or `--help`) or below for full details.
 
       -q, --quiet             Suppress progress output (remote scans stream
                              per-repo progress to stderr by default).
+
+      --concurrency=n         Max repositories scanned in parallel for
+                             --remote/--org runs. Default: 8. Errors on a
+                             single repository are reported as skips and do
+                             not abort the run.
 
       -v, --verbose           Enable verbose output.
 

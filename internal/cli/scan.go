@@ -12,7 +12,6 @@ import (
 	"github.com/whoisnjoguu/elostirion/pkg/forge"
 	"github.com/whoisnjoguu/elostirion/pkg/model"
 	pkgreader "github.com/whoisnjoguu/elostirion/pkg/reader"
-	"github.com/whoisnjoguu/elostirion/pkg/reconcile"
 	"github.com/whoisnjoguu/elostirion/pkg/report"
 	"github.com/whoisnjoguu/elostirion/pkg/scan"
 	"github.com/whoisnjoguu/elostirion/pkg/spec"
@@ -62,6 +61,7 @@ func init() {
 		"scan every repository in an organisation, e.g. github.com/acme")
 	scanCmd.MarkFlagsMutuallyExclusive("remote", "org")
 	addDepthFlag(scanCmd)
+	addConcurrencyFlag(scanCmd)
 }
 
 func runScan(cmd *cobra.Command, args []string) error {
@@ -102,7 +102,8 @@ func runScan(cmd *cobra.Command, args []string) error {
 	return renderAndExit(rep)
 }
 
-// runScanRemote audits repositories read directly from a provider API
+// runScanRemote audits repositories read directly from a provider API,
+// scanning up to --concurrency repos in parallel and streaming progress.
 func runScanRemote(s *spec.Spec) error {
 	ctx := context.Background()
 	var p *progress
@@ -118,29 +119,16 @@ func runScanRemote(s *spec.Spec) error {
 	}
 	p.begin(repos)
 
-	rep := &report.Report{SpecName: s.Name}
-	for i, repo := range repos {
-		reader, err := pkgreader.For(repo, forge.Config{Token: resolveToken(repo.Provider)})
-		if err != nil {
-			return failure("%v", err)
-		}
-		// listing the root authenticates the reader and drives marker filtering
-		entries, err := reader.ListFiles(ctx, "")
-		if err != nil {
-			return failure("%s: %v", repo.Slug(), err)
-		}
-		if len(languages) > 0 && !hasMarker(entries, languages) {
-			p.skipping(i+1, repo.Slug(), "no "+strings.Join(languages, "/")+" markers")
-			continue // no relevant marker for the selected languages
-		}
-		p.scanning(i+1, repo.Slug())
-		facts, err := scan.Run(pkgreader.FS(ctx, reader), repo, languages...)
-		if err != nil {
-			return failure("scan %s: %v", repo.Slug(), err)
-		}
-		rep.Add(facts.Repo, reconcile.EvaluateFS(s, facts, pkgreader.FS(ctx, reader)))
-	}
+	results := scanRemoteRepos(ctx, repos, concurrencyFlag, remoteWorker(s), p)
 	p.done()
+
+	rep := &report.Report{SpecName: s.Name}
+	for _, res := range results {
+		if res.skip != "" {
+			continue
+		}
+		rep.Add(res.repo, res.findings)
+	}
 	return renderAndExit(rep)
 }
 

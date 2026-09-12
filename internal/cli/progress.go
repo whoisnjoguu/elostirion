@@ -24,7 +24,6 @@ type progress struct {
 	phase    string // "discovering" or "scanning"
 	org      string
 	slugNow  string
-	i        int // current repo index (1-based)
 	total    int
 	width    int // slug column width for alignment
 	cw       int // counter digit width
@@ -118,19 +117,20 @@ func (p *progress) redrawLocked() {
 	case "discovering":
 		_, _ = fmt.Fprintf(p.w, "%s%s discovering repositories in %s…", eraseLine, spin, p.org)
 	case "scanning":
+		done := p.scanned + p.skipped
 		padded := fmt.Sprintf("%-*s", p.width, p.slugNow)
-		counter := p.counter.Render(fmt.Sprintf("%*d/%d", p.cw, p.i, p.total))
+		counter := p.counter.Render(fmt.Sprintf("%*d/%d", p.cw, done, p.total))
 		_, _ = fmt.Fprintf(p.w, "%s%s %s %s %s %s", eraseLine, spin,
-			p.scanVerb.Render("scanning"), p.slug.Render(padded), p.barLocked(), counter)
+			p.scanVerb.Render("scanning"), p.slug.Render(padded), p.barLocked(done), counter)
 	}
 }
 
-// barLocked renders the filled/empty progress blocks for i of total.
-func (p *progress) barLocked() string {
+// barLocked renders the filled/empty progress blocks for done of total.
+func (p *progress) barLocked(done int) string {
 	if p.total == 0 {
 		return ""
 	}
-	filled := barWidth * p.i / p.total
+	filled := barWidth * done / p.total
 	return p.barOn.Render(strings.Repeat("█", filled)) + strings.Repeat("░", barWidth-filled)
 }
 
@@ -193,36 +193,38 @@ func (p *progress) begin(repos []model.Repo) {
 	p.ensureAnim()
 }
 
-// scanning reports repo i of total as being scanned.
-func (p *progress) scanning(i int, slug string) {
+// scanning reports one repo as scanned; ordinals are assigned by completion
+// order, so concurrent workers need no index.
+func (p *progress) scanning(slug string) {
 	if p == nil {
 		return
 	}
 	p.mu.Lock()
 	p.scanned++
-	p.i, p.slugNow = i, slug
+	p.slugNow = slug
 	if p.tty {
 		p.redrawLocked()
 	} else {
-		p.lineLocked(p.scanVerb, "scanning", i, slug, "")
+		p.lineLocked(p.scanVerb, "scanning", p.scanned+p.skipped, slug, "")
 	}
 	p.mu.Unlock()
 }
 
-// skipping reports repo i of total as skipped, with the reason
-func (p *progress) skipping(i int, slug, reason string) {
+// skipping reports one repo as skipped, with the reason. On a TTY the skip
+// line persists above the redrawn bar.
+func (p *progress) skipping(slug, reason string) {
 	if p == nil {
 		return
 	}
 	p.mu.Lock()
 	p.skipped++
-	p.i, p.slugNow = i, slug
+	p.slugNow = slug
 	if p.tty {
 		_, _ = fmt.Fprint(p.w, eraseLine)
-		p.lineLocked(p.skipVerb, "skipping", i, slug, reason)
+		p.lineLocked(p.skipVerb, "skipping", p.scanned+p.skipped, slug, reason)
 		p.redrawLocked()
 	} else {
-		p.lineLocked(p.skipVerb, "skipping", i, slug, reason)
+		p.lineLocked(p.skipVerb, "skipping", p.scanned+p.skipped, slug, reason)
 	}
 	p.mu.Unlock()
 }
