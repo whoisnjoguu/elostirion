@@ -93,3 +93,50 @@ rules:
     field: stage_count
     op: gte
     value: "2"
+
+  # -------------------------------------------------------- Cross-file ----
+  - id: builder-tracks-gomod
+    description: Dockerfile builder image must track the Go version declared in go.mod.
+    severity: error
+    language: go
+    scanner: dockerfile
+    field: builder_image
+    op: matches
+    value_from:
+      key: gomod.go_version
+      template: '^golang:{value.major_minor}'
+
+  # ---------------------------------------------------------- Pipeline ----
+  - id: pipeline-has-security-scan
+    description: Every pipeline must run the fleet security scan step.
+    severity: error
+    scanner: pipeline
+    field: steps
+    op: contains
+    value: security-scan
+    recipe: sync-pipeline
+    target: |
+      image: registry.acme.dev/security-scan:v3
+      script:
+        - ./scripts/security-scan.sh
+
+  - id: pipeline-stage-order
+    description: Lint must run before tests, tests before build.
+    severity: warn
+    scanner: pipeline
+    field: steps
+    op: sequence
+    values: [lint, test, build]
+
+  # -------------------------------------------------------------- Files ----
+  - id: codeowners-present
+    description: Every repository must declare code owners.
+    severity: error
+    file: .github/CODEOWNERS
+    op: exists
+
+  - id: no-committed-env
+    description: Env files must never be committed.
+    severity: error
+    file: .env
+    op: absent

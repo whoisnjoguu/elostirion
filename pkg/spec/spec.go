@@ -28,6 +28,7 @@ const (
 	OpAbsent     Op = "absent"   // fact is absent (value ignored)
 	OpContains   Op = "contains" // observed list/string contains value
 	OpOneOf      Op = "oneof"    // observed is one of values
+	OpSequence   Op = "sequence" // observed list contains values as an ordered subsequence
 )
 
 // Rule is a single conformance constraint.
@@ -36,18 +37,32 @@ type Rule struct {
 	Description string         `yaml:"description,omitempty"`
 	Severity    model.Severity `yaml:"severity"`
 	Language    string         `yaml:"language,omitempty"`
-	Scanner     string         `yaml:"scanner"`
-	Field       string         `yaml:"field"`
+	Scanner     string         `yaml:"scanner,omitempty"`
+	Field       string         `yaml:"field,omitempty"`
+	File        string         `yaml:"file,omitempty"` // file rule: constrain a repo file's presence/content instead of a scanner fact
 	Op          Op             `yaml:"op"`
 	Value       string         `yaml:"value,omitempty"`
 	Values      []string       `yaml:"values,omitempty"`
+	ValueFrom   *ValueFrom     `yaml:"value_from,omitempty"` // derive the expected value from another fact
 	GraceUntil  string         `yaml:"grace_until,omitempty"`
 	Recipe      string         `yaml:"recipe,omitempty"`
 	Target      string         `yaml:"target,omitempty"`
 }
 
-// Key returns the "scanner.field" fact key this rule inspects.
+// ValueFrom derives a rule's expected value from another fact
+type ValueFrom struct {
+	Key      string `yaml:"key"`                // fact key to read, e.g. gomod.go_version
+	Template string `yaml:"template,omitempty"` // expansion with {value} and {value.major_minor}; default {value}
+}
+
+// IsFileRule reports whether the rule constrains a file rather than a scanner fact.
+func (r Rule) IsFileRule() bool { return r.File != "" }
+
+// Key returns the fact key this rule inspects
 func (r Rule) Key() string {
+	if r.IsFileRule() {
+		return "file:" + r.File
+	}
 	return r.Scanner + "." + r.Field
 }
 
@@ -71,11 +86,22 @@ func (s *Spec) Validate() error {
 			return fmt.Errorf("spec: duplicate rule id %q", r.ID)
 		}
 		seen[r.ID] = true
-		if r.Scanner == "" {
-			return fmt.Errorf("spec: rule %q has no scanner", r.ID)
-		}
-		if r.Field == "" && r.Op != OpExists && r.Op != OpAbsent {
-			return fmt.Errorf("spec: rule %q has no field", r.ID)
+		if r.IsFileRule() {
+			if r.Scanner != "" || r.Field != "" {
+				return fmt.Errorf("spec: rule %q sets both file and scanner/field; use one", r.ID)
+			}
+			switch r.Op {
+			case OpExists, OpAbsent, OpEquals, OpNotEquals, OpMatches, OpNotMatches, OpContains:
+			default:
+				return fmt.Errorf("spec: file rule %q has unsupported op %q", r.ID, r.Op)
+			}
+		} else {
+			if r.Scanner == "" {
+				return fmt.Errorf("spec: rule %q has no scanner", r.ID)
+			}
+			if r.Field == "" && r.Op != OpExists && r.Op != OpAbsent {
+				return fmt.Errorf("spec: rule %q has no field", r.ID)
+			}
 		}
 		if !validOp(r.Op) {
 			return fmt.Errorf("spec: rule %q has unknown op %q", r.ID, r.Op)
@@ -83,8 +109,20 @@ func (s *Spec) Validate() error {
 		if !validSeverity(r.Severity) {
 			return fmt.Errorf("spec: rule %q has invalid severity %q", r.ID, r.Severity)
 		}
-		if r.Op == OpOneOf && len(r.Values) == 0 {
-			return fmt.Errorf("spec: rule %q uses op oneof but has no values", r.ID)
+		if (r.Op == OpOneOf || r.Op == OpSequence) && len(r.Values) == 0 {
+			return fmt.Errorf("spec: rule %q uses op %s but has no values", r.ID, r.Op)
+		}
+		if r.ValueFrom != nil {
+			if r.ValueFrom.Key == "" {
+				return fmt.Errorf("spec: rule %q has value_from without key", r.ID)
+			}
+			if r.Value != "" {
+				return fmt.Errorf("spec: rule %q sets both value and value_from; use one", r.ID)
+			}
+			switch r.Op {
+			case OpExists, OpAbsent, OpOneOf, OpSequence:
+				return fmt.Errorf("spec: rule %q op %q cannot use value_from", r.ID, r.Op)
+			}
 		}
 		if r.Recipe != "" && r.Target == "" {
 			switch r.Op {
@@ -101,7 +139,7 @@ func (s *Spec) Validate() error {
 func validOp(op Op) bool {
 	switch op {
 	case OpEquals, OpNotEquals, OpGTE, OpLTE, OpMatches, OpNotMatches,
-		OpExists, OpAbsent, OpContains, OpOneOf:
+		OpExists, OpAbsent, OpContains, OpOneOf, OpSequence:
 		return true
 	default:
 		return false

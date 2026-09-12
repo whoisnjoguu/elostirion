@@ -102,19 +102,24 @@ func runScan(cmd *cobra.Command, args []string) error {
 	return renderAndExit(rep)
 }
 
-// runScanRemote audits repositories read directly from a provider API.
+// runScanRemote audits repositories read directly from a provider API
 func runScanRemote(s *spec.Spec) error {
 	ctx := context.Background()
-	repos, err := remoteTargets(ctx)
+	var p *progress
+	if !quiet {
+		p = newProgress(os.Stderr, useColorErr(), stderrIsTTY())
+	}
+	repos, err := remoteTargets(ctx, p)
 	if err != nil {
 		return err
 	}
 	if len(repos) == 0 {
 		return failure("no repositories to scan")
 	}
+	p.begin(repos)
 
 	rep := &report.Report{SpecName: s.Name}
-	for _, repo := range repos {
+	for i, repo := range repos {
 		reader, err := pkgreader.For(repo, forge.Config{Token: resolveToken(repo.Provider)})
 		if err != nil {
 			return failure("%v", err)
@@ -125,28 +130,34 @@ func runScanRemote(s *spec.Spec) error {
 			return failure("%s: %v", repo.Slug(), err)
 		}
 		if len(languages) > 0 && !hasMarker(entries, languages) {
+			p.skipping(i+1, repo.Slug(), "no "+strings.Join(languages, "/")+" markers")
 			continue // no relevant marker for the selected languages
 		}
+		p.scanning(i+1, repo.Slug())
 		facts, err := scan.Run(pkgreader.FS(ctx, reader), repo, languages...)
 		if err != nil {
 			return failure("scan %s: %v", repo.Slug(), err)
 		}
-		rep.Add(facts.Repo, reconcile.Evaluate(s, facts))
+		rep.Add(facts.Repo, reconcile.EvaluateFS(s, facts, pkgreader.FS(ctx, reader)))
 	}
+	p.done()
 	return renderAndExit(rep)
 }
 
 // remoteTargets resolves the --remote or --org flags into repositories to scan.
-func remoteTargets(ctx context.Context) ([]model.Repo, error) {
+func remoteTargets(ctx context.Context, p *progress) ([]model.Repo, error) {
 	if orgFlag != "" {
 		provider, org, err := parseOrg(orgFlag)
 		if err != nil {
 			return nil, failure("%v", err)
 		}
+		p.discovering(org)
 		repos, err := pkgreader.ListOrgRepos(ctx, provider, org, forge.Config{Token: resolveToken(provider)})
 		if err != nil {
+			p.endLine()
 			return nil, failure("list org %s: %v", org, err)
 		}
+		p.discovered(len(repos))
 		return repos, nil
 	}
 	repos := make([]model.Repo, 0, len(remoteFlag))
