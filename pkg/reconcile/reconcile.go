@@ -31,6 +31,15 @@ func evalRule(rule spec.Rule, facts *model.Facts) (model.Finding, bool) {
 	key := rule.Key()
 	raw, present := facts.Get(key)
 
+	// cross-fact rules derive the expected value from another fact
+	if rule.ValueFrom != nil {
+		ref, ok := facts.Get(rule.ValueFrom.Key)
+		if !ok {
+			return model.Finding{}, false
+		}
+		rule.Value = expandValueFrom(rule.ValueFrom.Template, toString(ref))
+	}
+
 	switch rule.Op {
 	case spec.OpExists:
 		if present {
@@ -46,10 +55,24 @@ func evalRule(rule spec.Rule, facts *model.Facts) (model.Finding, bool) {
 
 	// All remaining operators need the fact to be present.
 	if !present {
-		return violation(rule, facts, "<missing>", rule.Value), true
+		return violation(rule, facts, "<missing>", expected(rule)), true
+	}
+
+	if list, ok := raw.([]string); ok {
+		return evalListRule(rule, facts, list)
 	}
 
 	got := toString(raw)
+	if rule.IsFileRule() && (rule.Op == spec.OpEquals || rule.Op == spec.OpNotEquals) {
+		// Template equality ignores trailing-whitespace noise.
+		norm := rule
+		norm.Value = normalizeFileContent(rule.Value)
+		ok, err := compare(norm, normalizeFileContent(got))
+		if err == nil && ok {
+			return model.Finding{}, false
+		}
+		return violation(rule, facts, got, expected(rule)), true
+	}
 	ok, err := compare(rule, got)
 	if err != nil {
 		return violation(rule, facts, got, rule.Value), true
@@ -58,6 +81,70 @@ func evalRule(rule spec.Rule, facts *model.Facts) (model.Finding, bool) {
 		return model.Finding{}, false
 	}
 	return violation(rule, facts, got, expected(rule)), true
+}
+
+// evalListRule applies element-aware semantics when the fact is a list
+func evalListRule(rule spec.Rule, facts *model.Facts, list []string) (model.Finding, bool) {
+	joined := strings.Join(list, ", ")
+	switch rule.Op {
+	case spec.OpContains:
+		for _, v := range list {
+			if v == rule.Value {
+				return model.Finding{}, false
+			}
+		}
+		return violation(rule, facts, joined, rule.Value), true
+	case spec.OpMatches:
+		re, err := regexp.Compile(rule.Value)
+		if err != nil {
+			return violation(rule, facts, joined, rule.Value), true
+		}
+		for i, v := range list {
+			if !re.MatchString(v) {
+				return violationAt(rule, facts.ElemSource(rule.Key(), i), facts, v, rule.Value), true
+			}
+		}
+		return model.Finding{}, false
+	case spec.OpNotMatches:
+		re, err := regexp.Compile(rule.Value)
+		if err != nil {
+			return violation(rule, facts, joined, rule.Value), true
+		}
+		for i, v := range list {
+			if re.MatchString(v) {
+				return violationAt(rule, facts.ElemSource(rule.Key(), i), facts, v, "not "+rule.Value), true
+			}
+		}
+		return model.Finding{}, false
+	case spec.OpOneOf:
+		allowed := make(map[string]bool, len(rule.Values))
+		for _, v := range rule.Values {
+			allowed[v] = true
+		}
+		for i, v := range list {
+			if !allowed[v] {
+				return violationAt(rule, facts.ElemSource(rule.Key(), i), facts, v, expected(rule)), true
+			}
+		}
+		return model.Finding{}, false
+	case spec.OpSequence:
+		i := 0
+		for _, v := range list {
+			if i < len(rule.Values) && v == rule.Values[i] {
+				i++
+			}
+		}
+		if i == len(rule.Values) {
+			return model.Finding{}, false
+		}
+		return violation(rule, facts, joined, expected(rule)), true
+	default:
+		ok, err := compare(rule, joined)
+		if err != nil || !ok {
+			return violation(rule, facts, joined, expected(rule)), true
+		}
+		return model.Finding{}, false
+	}
 }
 
 // compare returns whether the observed value satisfies the rule.
@@ -101,6 +188,11 @@ func compare(rule spec.Rule, got string) (bool, error) {
 
 // violation builds a Finding, applying grace-period downgrade of errors.
 func violation(rule spec.Rule, facts *model.Facts, got, want string) model.Finding {
+	return violationAt(rule, facts.Sources[rule.Key()], facts, got, want)
+}
+
+// violationAt builds a Finding pointing at an explicit location.
+func violationAt(rule spec.Rule, loc model.Location, facts *model.Facts, got, want string) model.Finding {
 	sev := effectiveSeverity(rule)
 	msg := rule.Description
 	if msg == "" {
@@ -111,10 +203,21 @@ func violation(rule spec.Rule, facts *model.Facts, got, want string) model.Findi
 		Message:  msg,
 		Severity: sev,
 		Repo:     facts.Repo,
-		Location: facts.Sources[rule.Key()],
-		Got:      got,
-		Want:     want,
+		Location: loc,
+		Got:      display(got),
+		Want:     display(want),
 	}
+}
+
+// display keeps got/want single-line and bounded for report rendering.
+func display(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i] + " …"
+	}
+	if len(s) > 120 {
+		s = s[:120] + "…"
+	}
+	return s
 }
 
 // effectiveSeverity downgrades an error to a warning while a grace period is still in effect.
@@ -134,7 +237,7 @@ func effectiveSeverity(rule spec.Rule) model.Severity {
 }
 
 func expected(rule spec.Rule) string {
-	if rule.Op == spec.OpOneOf {
+	if rule.Op == spec.OpOneOf || rule.Op == spec.OpSequence {
 		return strings.Join(rule.Values, ", ")
 	}
 	return rule.Value
@@ -146,11 +249,31 @@ func toString(v any) string {
 		return t
 	case int:
 		return strconv.Itoa(t)
+	case []string:
+		return strings.Join(t, ", ")
 	case fmt.Stringer:
 		return t.String()
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+// expandValueFrom expands a value_from template with the referenced fact's value
+func expandValueFrom(template, value string) string {
+	if template == "" {
+		return value
+	}
+	out := strings.ReplaceAll(template, "{value.major_minor}", majorMinor(value))
+	return strings.ReplaceAll(out, "{value}", value)
+}
+
+// majorMinor truncates a dotted version to its first two segments.
+func majorMinor(v string) string {
+	parts := strings.SplitN(strings.TrimPrefix(v, "v"), ".", 3)
+	if len(parts) >= 2 {
+		return parts[0] + "." + parts[1]
+	}
+	return v
 }
 
 // compareVersions compares dotted numeric versions such as "1.24" or "1.24.3".
